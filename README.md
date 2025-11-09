@@ -1,107 +1,99 @@
-# React
+# SmartTech Connect
 
-A modern React-based project utilizing the latest frontend technologies and tools for building responsive web applications.
+A full‑stack hyperlocal technician marketplace built with React (Vite) on the frontend and a Node/Express API on the backend.  
+This repo now separates the codebase into clear `frontend/` and `backend/` workspaces while retaining the original functionality from the GitHub source ([subodh-001/smarttech_connect-main](https://github.com/subodh-001/smarttech_connect-main.git)).
 
-## 🚀 Features
-
-- **React 18** - React version with improved rendering and concurrent features
-- **Vite** - Lightning-fast build tool and development server
-- **Redux Toolkit** - State management with simplified Redux setup
-- **TailwindCSS** - Utility-first CSS framework with extensive customization
-- **React Router v6** - Declarative routing for React applications
-- **Data Visualization** - Integrated D3.js and Recharts for powerful data visualization
-- **Form Management** - React Hook Form for efficient form handling
-- **Animation** - Framer Motion for smooth UI animations
-- **Testing** - Jest and React Testing Library setup
-
-## 📋 Prerequisites
-
-- Node.js (v14.x or higher)
-- npm or yarn
-
-## 🛠️ Installation
-
-1. Install dependencies:
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
-   
-2. Start the development server:
-   ```bash
-   npm start
-   # or
-   yarn start
-   ```
+---
 
 ## 📁 Project Structure
 
 ```
-react_app/
-├── public/             # Static assets
-├── src/
-│   ├── components/     # Reusable UI components
-│   ├── pages/          # Page components
-│   ├── styles/         # Global styles and Tailwind configuration
-│   ├── App.jsx         # Main application component
-│   ├── Routes.jsx      # Application routes
-│   └── index.jsx       # Application entry point
-├── .env                # Environment variables
-├── index.html          # HTML template
-├── package.json        # Project dependencies and scripts
-├── tailwind.config.js  # Tailwind CSS configuration
-└── vite.config.js      # Vite configuration
+smarttech_connect-main/
+├── frontend/            # Vite + React application (original src/, public/, etc.)
+│   ├── package.json
+│   ├── src/
+│   └── ...              # Tailwind config, build output, static assets
+├── backend/             # Express + MongoDB API (renamed from server/)
+│   ├── package.json
+│   ├── .env             # MongoDB URI & JWT secret (see below)
+│   └── src/
+└── README.md
 ```
 
-## 🧩 Adding Routes
+- Everything that previously lived at the repo root (Vite project, `src/`, `public/`, `dist/`, etc.) now sits inside `frontend/`.
+- The original `server/` folder has been renamed to `backend/`.
 
-To add new routes to the application, update the `Routes.jsx` file:
+---
 
-```jsx
-import { useRoutes } from "react-router-dom";
-import HomePage from "pages/HomePage";
-import AboutPage from "pages/AboutPage";
+## 🔐 Environment Variables
 
-const ProjectRoutes = () => {
-  let element = useRoutes([
-    { path: "/", element: <HomePage /> },
-    { path: "/about", element: <AboutPage /> },
-    // Add more routes as needed
-  ]);
+The backend has been configured with the MongoDB Atlas connection string you provided:
 
-  return element;
-};
+```
+backend/.env
+└── MONGODB_URI=mongodb+srv://Subodh:8w-Yvsi4aA..3XU@smarttech.xc49ynv.mongodb.net/?appName=SmartTech
+└── JWT_SECRET=dev-secret-change-me
+└── EMAIL_USER=your_gmail_username@gmail.com
+└── EMAIL_PASS=your_gmail_app_password
+└── EMAIL_FROM="SmartTech Connect <your_gmail_username@gmail.com>"
 ```
 
-## 🎨 Styling
+Feel free to replace these values with your own secure credentials for production.
 
-This project uses Tailwind CSS for styling. The configuration includes:
+If the frontend requires environment variables, place them under `frontend/.env` (none are bundled by default).
 
-- Forms plugin for form styling
-- Typography plugin for text styling
-- Aspect ratio plugin for responsive elements
-- Container queries for component-specific responsive design
-- Fluid typography for responsive text
-- Animation utilities
+---
 
-## 📱 Responsive Design
+## 🛠️ Getting Started
 
-The app is built with responsive design using Tailwind CSS breakpoints.
+### Prerequisites
+- Node.js 18+
+- npm (comes with Node.js)
 
-
-## 📦 Deployment
-
-Build the application for production:
-
+### Install & Run Frontend
 ```bash
-npm run build
+cd frontend
+npm install
+npm run dev         # starts Vite dev server (default http://localhost:5173)
 ```
 
-## 🙏 Acknowledgments
+### Install & Run Backend
+```bash
+cd backend
+npm install
+npm run dev         # nodemon server on http://localhost:5000
+```
 
-- Built with [Rocket.new](https://rocket.new)
-- Powered by React and Vite
-- Styled with Tailwind CSS
+> The backend automatically connects to the MongoDB Atlas cluster via `MONGODB_URI`.  
+> If the URI is missing, it falls back to an in-memory MongoDB instance for local testing.
 
-Built with ❤️ on Rocket.new
+---
+
+## 🧰 Tech Stack (unchanged from original project)
+
+**Frontend**
+- React 18 (Vite)
+- React Router v6
+- Redux Toolkit
+- Tailwind CSS + tailwindcss-animate
+- Framer Motion
+- Recharts, D3.js
+- React Hook Form, Axios, Lucide icons, etc.
+
+**Backend**
+- Node.js / Express
+- Mongoose / MongoDB Atlas
+- JWT auth, bcrypt
+- MongoDB Memory Server for fallback development
+
+---
+
+## ✅ Migration Notes
+
+- The entire history from the original GitHub repo has been restored into `frontend/`.
+- The backend folder structure and code remain unchanged aside from the rename and refreshed `.env`.
+- No source code was modified beyond moving files and updating configuration paths.
+
+You can now continue development with a clean separation between the React frontend and the Express backend.
+
+Happy building! 🚀
