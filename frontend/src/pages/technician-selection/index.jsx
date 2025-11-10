@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import Header from '../../components/ui/Header';
 import TechnicianMap from './components/TechnicianMap';
 import TechnicianList from './components/TechnicianList';
@@ -7,260 +8,260 @@ import FilterControls from './components/FilterControls';
 import ComparisonModal from './components/ComparisonModal';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
+import { useAuth } from '../../contexts/MongoAuthContext';
+
+const DEFAULT_RADIUS_KM = 12;
+const DEFAULT_COORDINATES = { lat: 12.9716, lng: 77.5946 };
+
+const CATEGORY_LABELS = {
+  electrical: 'Electrical',
+  plumbing: 'Plumbing',
+  hvac: 'AC Repair',
+  appliance_repair: 'Appliance Repair',
+  cleaning: 'Cleaning',
+  handyman: 'Handyman',
+  gardening: 'Gardening',
+};
+
+const defaultFilters = {
+  sortBy: 'distance',
+  availability: 'all',
+  rating: 'all',
+  priceRange: 'all',
+  experience: 'all',
+  verified: false,
+  responseTime: 'all',
+};
+
+const responseThresholdMap = {
+  '5min': 5,
+  '15min': 15,
+  '30min': 30,
+  '1hr': 60,
+};
+
+const filterTechnicians = (source = [], filters = defaultFilters) => {
+  let result = [...source];
+
+  if (filters.availability !== 'all') {
+    result = result.filter((tech) => tech.availability === filters.availability);
+  }
+
+  if (filters.rating !== 'all') {
+    const minRating = parseFloat(filters.rating);
+    result = result.filter((tech) => (tech.ratingValue ?? parseFloat(tech.rating)) >= minRating);
+  }
+
+  if (filters.priceRange !== 'all') {
+    if (filters.priceRange.endsWith('+')) {
+      const min = parseInt(filters.priceRange, 10);
+      result = result.filter((tech) => {
+        const rate = tech.priceWithSurge ?? tech.hourlyRate ?? 0;
+        return rate >= min;
+      });
+    } else {
+      const [minRaw, maxRaw] = filters.priceRange.split('-');
+      const min = parseInt(minRaw, 10);
+      const max = parseInt(maxRaw, 10);
+      result = result.filter((tech) => {
+        const rate = tech.priceWithSurge ?? tech.hourlyRate ?? 0;
+        return rate >= min && rate <= max;
+      });
+    }
+  }
+
+  if (filters.experience !== 'all') {
+    if (filters.experience.endsWith('+')) {
+      const min = parseInt(filters.experience, 10);
+      result = result.filter((tech) => (tech.yearsOfExperience || 0) >= min);
+    } else {
+      const [minRaw, maxRaw] = filters.experience.split('-');
+      const min = parseInt(minRaw, 10);
+      const max = parseInt(maxRaw, 10);
+      result = result.filter((tech) => {
+        const yrs = tech.yearsOfExperience || 0;
+        return yrs >= min && yrs <= max;
+      });
+    }
+  }
+
+  if (filters.verified) {
+    result = result.filter((tech) => tech.verified || tech.isVerified);
+  }
+
+  if (filters.responseTime !== 'all') {
+    const threshold = responseThresholdMap[filters.responseTime];
+    if (threshold) {
+      result = result.filter((tech) => (tech.responseTimeMinutes || Infinity) <= threshold);
+    }
+  }
+
+  const compareNumbers = (a, b, direction = 'asc') => {
+    const safeA = Number.isFinite(a) ? a : Number.POSITIVE_INFINITY;
+    const safeB = Number.isFinite(b) ? b : Number.POSITIVE_INFINITY;
+    return direction === 'asc' ? safeA - safeB : safeB - safeA;
+  };
+
+  switch (filters.sortBy) {
+    case 'distance':
+      result.sort((a, b) => compareNumbers(a.distanceKm, b.distanceKm));
+      break;
+    case 'rating':
+      result.sort(
+        (a, b) => (b.ratingValue ?? parseFloat(b.rating)) - (a.ratingValue ?? parseFloat(a.rating))
+      );
+      break;
+    case 'price-low':
+      result.sort((a, b) =>
+        compareNumbers(
+          a.priceWithSurge ?? a.hourlyRate,
+          b.priceWithSurge ?? b.hourlyRate
+        )
+      );
+      break;
+    case 'price-high':
+      result.sort((a, b) =>
+        compareNumbers(
+          a.priceWithSurge ?? a.hourlyRate,
+          b.priceWithSurge ?? b.hourlyRate,
+          'desc'
+        )
+      );
+      break;
+    case 'experience':
+      result.sort((a, b) => compareNumbers(a.yearsOfExperience, b.yearsOfExperience, 'desc'));
+      break;
+    case 'response-time':
+      result.sort((a, b) => compareNumbers(a.responseTimeMinutes, b.responseTimeMinutes));
+      break;
+    default:
+      break;
+  }
+
+  return result;
+};
 
 const TechnicianSelection = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeView, setActiveView] = useState('both'); // 'map', 'list', 'both'
+  const { user } = useAuth();
+
+  const initialState = location.state || {};
+  const initialRequest = initialState.serviceRequest || null;
+
+  const [serviceRequest, setServiceRequest] = useState(initialRequest);
+  const [activeView, setActiveView] = useState('both');
+  const [technicians, setTechnicians] = useState(initialState.technicians || []);
+  const [matchingSummary, setMatchingSummary] = useState(initialState.matchingSummary || null);
+  const [filteredTechnicians, setFilteredTechnicians] = useState(initialState.technicians || []);
+  const [activeFilters, setActiveFilters] = useState(defaultFilters);
   const [selectedTechnician, setSelectedTechnician] = useState(null);
   const [selectedForComparison, setSelectedForComparison] = useState([]);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [filteredTechnicians, setFilteredTechnicians] = useState([]);
-
-  // Mock user data
-  const mockUser = {
-    id: 1,
-    name: "Rajesh Kumar",
-    email: "rajesh.kumar@email.com",
-    phone: "+91 9876543210"
-  };
-
-  // Mock user location
-  const userLocation = {
-    lat: 28.6139,
-    lng: 77.2090,
-    address: "Connaught Place, New Delhi"
-  };
-
-  // Mock service request data (from previous page)
-  const serviceRequest = location?.state?.serviceRequest || {
-    category: "Electrical",
-    subcategory: "Fan Installation",
-    description: "Need to install 2 ceiling fans in bedroom",
-    budget: 800,
-    preferredTime: "Today, 2:00 PM - 6:00 PM",
-    urgency: "medium"
-  };
-
-  // Mock technicians data
-  const mockTechnicians = [
-    {
-      id: 1,
-      name: "Amit Sharma",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      rating: 4.8,
-      reviewCount: 127,
-      experience: "8 years",
-      specializations: ["Electrical", "Fan Installation", "Wiring", "Switch Repair"],
-      distance: "0.8 km",
-      eta: "15 mins",
-      hourlyRate: 450,
-      availability: "available",
-      isVerified: true,
-      badges: ["Top Rated", "Quick Response"],
-      responseTime: "2 mins",
-      recentReview: {
-        rating: 5,
-        customerName: "Priya M.",
-        comment: "Excellent work! Fixed my ceiling fan quickly and professionally. Highly recommended for electrical work."
-      },
-      location: { lat: 28.6149, lng: 77.2100 }
-    },
-    {
-      id: 2,
-      name: "Vikram Singh",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      rating: 4.6,
-      reviewCount: 89,
-      experience: "5 years",
-      specializations: ["Electrical", "AC Repair", "Appliance Installation"],
-      distance: "1.2 km",
-      eta: "20 mins",
-      hourlyRate: 400,
-      availability: "available",
-      isVerified: true,
-      badges: ["Verified Pro"],
-      responseTime: "5 mins",
-      recentReview: {
-        rating: 4,
-        customerName: "Rohit K.",
-        comment: "Good service and reasonable pricing. Completed the fan installation on time."
-      },
-      location: { lat: 28.6129, lng: 77.2080 }
-    },
-    {
-      id: 3,
-      name: "Suresh Patel",
-      avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&h=150&fit=crop&crop=face",
-      rating: 4.9,
-      reviewCount: 203,
-      experience: "12 years",
-      specializations: ["Electrical", "Home Automation", "Smart Switches", "Wiring"],
-      distance: "1.5 km",
-      eta: "25 mins",
-      hourlyRate: 600,
-      availability: "busy",
-      isVerified: true,
-      badges: ["Expert", "Premium Service"],
-      responseTime: "1 min",
-      recentReview: {
-        rating: 5,
-        customerName: "Anjali S.",
-        comment: "Outstanding expertise in electrical work. Installed smart switches perfectly. Worth every penny!"
-      },
-      location: { lat: 28.6159, lng: 77.2110 }
-    },
-    {
-      id: 4,
-      name: "Ravi Kumar",
-      avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&h=150&fit=crop&crop=face",
-      rating: 4.4,
-      reviewCount: 56,
-      experience: "3 years",
-      specializations: ["Electrical", "Basic Repairs", "Fan Service"],
-      distance: "2.1 km",
-      eta: "30 mins",
-      hourlyRate: 300,
-      availability: "available",
-      isVerified: false,
-      badges: [],
-      responseTime: "10 mins",
-      recentReview: {
-        rating: 4,
-        customerName: "Deepak T.",
-        comment: "Affordable and reliable service. Good for basic electrical work."
-      },
-      location: { lat: 28.6119, lng: 77.2070 }
-    },
-    {
-      id: 5,
-      name: "Manoj Gupta",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face",
-      rating: 4.7,
-      reviewCount: 145,
-      experience: "7 years",
-      specializations: ["Electrical", "Industrial Wiring", "Motor Repair"],
-      distance: "1.8 km",
-      eta: "28 mins",
-      hourlyRate: 500,
-      availability: "available",
-      isVerified: true,
-      badges: ["Industrial Expert"],
-      responseTime: "3 mins",
-      recentReview: {
-        rating: 5,
-        customerName: "Sanjay R.",
-        comment: "Professional approach and quality work. Fixed complex wiring issues efficiently."
-      },
-      location: { lat: 28.6169, lng: 77.2120 }
-    },
-    {
-      id: 6,
-      name: "Ashok Yadav",
-      avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face",
-      rating: 4.2,
-      reviewCount: 34,
-      experience: "4 years",
-      specializations: ["Electrical", "Home Repairs", "Switch Installation"],
-      distance: "2.5 km",
-      eta: "35 mins",
-      hourlyRate: 350,
-      availability: "offline",
-      isVerified: true,
-      badges: [],
-      responseTime: "15 mins",
-      recentReview: {
-        rating: 4,
-        customerName: "Meera P.",
-        comment: "Decent work quality. Completed the job as requested."
-      },
-      location: { lat: 28.6109, lng: 77.2060 }
-    }
-  ];
+  const [loading, setLoading] = useState(!initialState.technicians);
+  const [error, setError] = useState(null);
+  const filtersRef = useRef(activeFilters);
+  const [profileTechnician, setProfileTechnician] = useState(null);
+  const [bookingState, setBookingState] = useState({ submitting: false, technicianId: null });
 
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setFilteredTechnicians(mockTechnicians);
-      setLoading(false);
-    }, 1500);
+    filtersRef.current = activeFilters;
+  }, [activeFilters]);
 
-    return () => clearTimeout(timer);
-  }, []);
+  useEffect(() => {
+    if (initialState.technicians && initialState.technicians.length && serviceRequest) {
+      const surgeMultiplier =
+        serviceRequest?.requirements?.surgeMultiplier ??
+        (serviceRequest?.priority === 'urgent'
+          ? 1.2
+          : serviceRequest?.priority === 'high'
+          ? 1.1
+          : 1);
+      const mapped = initialState.technicians.map((tech) => ({
+        ...tech,
+        priceWithSurge: Math.round((tech.hourlyRate || 0) * surgeMultiplier),
+        surgeMultiplier,
+      }));
+      setTechnicians(mapped);
+      setFilteredTechnicians(filterTechnicians(mapped, defaultFilters));
+    }
+  }, [initialState.technicians, serviceRequest]);
+
+  useEffect(() => {
+    if (!serviceRequest) {
+      navigate('/service-request-creation', { replace: true });
+    }
+  }, [serviceRequest, navigate]);
+
+  const userLocation = useMemo(() => {
+    const coords = serviceRequest?.locationCoordinates || DEFAULT_COORDINATES;
+    return {
+      lat: coords.lat ?? DEFAULT_COORDINATES.lat,
+      lng: coords.lng ?? DEFAULT_COORDINATES.lng,
+      address: serviceRequest?.locationAddress || 'Bangalore, India',
+    };
+  }, [serviceRequest]);
+
+  const fetchTechnicians = useCallback(async () => {
+    if (!serviceRequest) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = {
+        category: serviceRequest.category,
+        radius: DEFAULT_RADIUS_KM,
+      };
+      if (serviceRequest.locationCoordinates) {
+        params.lat = serviceRequest.locationCoordinates.lat;
+        params.lng = serviceRequest.locationCoordinates.lng;
+      }
+      const { data } = await axios.get('/api/technicians/available', { params });
+      const surgeMultiplier =
+        serviceRequest?.requirements?.surgeMultiplier ??
+        (serviceRequest?.priority === 'urgent'
+          ? 1.2
+          : serviceRequest?.priority === 'high'
+          ? 1.1
+          : 1);
+      const fetchedTechnicians = (data?.technicians || []).map((tech) => {
+        const baseRate = Number(tech.hourlyRate || 0);
+        const priceWithSurge = surgeMultiplier !== 1 ? Math.round(baseRate * surgeMultiplier) : baseRate;
+        return {
+          ...tech,
+          priceWithSurge,
+          surgeMultiplier,
+        };
+      });
+      setTechnicians(fetchedTechnicians);
+      setMatchingSummary(data?.summary || null);
+      setFilteredTechnicians(filterTechnicians(fetchedTechnicians, filtersRef.current));
+    } catch (err) {
+      console.error('Failed to load technicians:', err);
+      setError('Unable to load technicians right now. Please try again later.');
+      setTechnicians([]);
+      setFilteredTechnicians([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [serviceRequest]);
+
+  useEffect(() => {
+    fetchTechnicians();
+  }, [fetchTechnicians]);
+
+  useEffect(() => {
+    setFilteredTechnicians(filterTechnicians(technicians, activeFilters));
+  }, [technicians, activeFilters]);
 
   const handleFilterChange = (filters) => {
-    let filtered = [...mockTechnicians];
-
-    // Apply availability filter
-    if (filters?.availability !== 'all') {
-      filtered = filtered?.filter(tech => tech?.availability === filters?.availability);
-    }
-
-    // Apply rating filter
-    if (filters?.rating !== 'all') {
-      const minRating = parseFloat(filters?.rating);
-      filtered = filtered?.filter(tech => tech?.rating >= minRating);
-    }
-
-    // Apply price range filter
-    if (filters?.priceRange !== 'all') {
-      const [min, max] = filters?.priceRange?.split('-')?.map(p => p?.replace('+', ''));
-      if (max) {
-        filtered = filtered?.filter(tech => tech?.hourlyRate >= parseInt(min) && tech?.hourlyRate <= parseInt(max));
-      } else {
-        filtered = filtered?.filter(tech => tech?.hourlyRate >= parseInt(min));
-      }
-    }
-
-    // Apply experience filter
-    if (filters?.experience !== 'all') {
-      const [minExp, maxExp] = filters?.experience?.split('-')?.map(e => e?.replace('+', ''));
-      if (maxExp) {
-        filtered = filtered?.filter(tech => {
-          const exp = parseInt(tech?.experience);
-          return exp >= parseInt(minExp) && exp <= parseInt(maxExp);
-        });
-      } else {
-        filtered = filtered?.filter(tech => parseInt(tech?.experience) >= parseInt(minExp));
-      }
-    }
-
-    // Apply verified filter
-    if (filters?.verified) {
-      filtered = filtered?.filter(tech => tech?.isVerified);
-    }
-
-    setFilteredTechnicians(filtered);
+    setActiveFilters(filters);
+    setFilteredTechnicians(filterTechnicians(technicians, filters));
   };
 
   const handleSortChange = (sortBy) => {
-    let sorted = [...filteredTechnicians];
-
-    switch (sortBy) {
-      case 'distance':
-        sorted?.sort((a, b) => parseFloat(a?.distance) - parseFloat(b?.distance));
-        break;
-      case 'rating':
-        sorted?.sort((a, b) => b?.rating - a?.rating);
-        break;
-      case 'price-low':
-        sorted?.sort((a, b) => a?.hourlyRate - b?.hourlyRate);
-        break;
-      case 'price-high':
-        sorted?.sort((a, b) => b?.hourlyRate - a?.hourlyRate);
-        break;
-      case 'experience':
-        sorted?.sort((a, b) => parseInt(b?.experience) - parseInt(a?.experience));
-        break;
-      case 'response-time':
-        sorted?.sort((a, b) => parseInt(a?.responseTime) - parseInt(b?.responseTime));
-        break;
-      default:
-        break;
-    }
-
-    setFilteredTechnicians(sorted);
+    const nextFilters = { ...activeFilters, sortBy };
+    setActiveFilters(nextFilters);
+    setFilteredTechnicians(filterTechnicians(technicians, nextFilters));
   };
 
   const handleTechnicianSelect = (technician) => {
@@ -268,52 +269,43 @@ const TechnicianSelection = () => {
   };
 
   const handleViewProfile = (technician) => {
-    console.log('View profile for:', technician?.name);
-    // Navigate to technician profile page
+    setProfileTechnician(technician);
   };
 
   const handleSendMessage = (technician) => {
-    console.log('Send message to:', technician?.name);
-    // Open chat/message modal
-  };
-
-  const handleBookNow = (technician) => {
-    console.log('Book technician:', technician?.name);
-    // Navigate to booking confirmation with technician and service details
-    navigate('/live-tracking', {
+    navigate('/chat-communication', {
       state: {
         technician,
         serviceRequest,
-        bookingDetails: {
-          scheduledTime: serviceRequest?.preferredTime,
-          estimatedCost: technician?.hourlyRate * 2, // Assuming 2 hours
-          bookingId: `BK${Date.now()}`,
-          status: 'confirmed'
-        }
-      }
+      },
     });
   };
 
+  const handleBookNow = async (technician) => {
+    if (!serviceRequest?.id) return;
+    try {
+      setBookingState({ submitting: true, technicianId: technician?.id });
+      await axios.patch(`/api/service-requests/${serviceRequest.id}/status`, {
+        status: 'pending',
+        technicianId: technician?.userId || technician?.id,
+      });
+      alert('Request sent! Waiting for the technician to confirm.');
+      navigate('/user-dashboard?tab=services');
+    } catch (err) {
+      console.error('Failed to send booking request:', err);
+      alert(err?.response?.data?.error || 'Unable to send booking request. Please try again.');
+    } finally {
+      setBookingState({ submitting: false, technicianId: null });
+    }
+  };
+
   const handleCompare = (technician) => {
-    const isSelected = selectedForComparison?.some(selected => selected?.id === technician?.id);
-    
+    const isSelected = selectedForComparison.some((item) => item.id === technician.id);
     if (isSelected) {
-      setSelectedForComparison(prev => prev?.filter(selected => selected?.id !== technician?.id));
-    } else {
-      if (selectedForComparison?.length < 3) {
-        setSelectedForComparison(prev => [...prev, technician]);
-      }
+      setSelectedForComparison((prev) => prev.filter((item) => item.id !== technician.id));
+    } else if (selectedForComparison.length < 3) {
+      setSelectedForComparison((prev) => [...prev, technician]);
     }
-  };
-
-  const handleShowComparison = () => {
-    if (selectedForComparison?.length > 0) {
-      setShowComparisonModal(true);
-    }
-  };
-
-  const handleCloseComparison = () => {
-    setShowComparisonModal(false);
   };
 
   const handleBookFromComparison = (technician) => {
@@ -321,15 +313,31 @@ const TechnicianSelection = () => {
     handleBookNow(technician);
   };
 
+  const categoryLabel = CATEGORY_LABELS[serviceRequest?.category] || serviceRequest?.category;
+
+  const budgetLabel = useMemo(() => {
+    if (typeof serviceRequest?.budgetMin === 'number' && typeof serviceRequest?.budgetMax === 'number') {
+      return `₹${serviceRequest.budgetMin.toLocaleString('en-IN')} - ₹${serviceRequest.budgetMax.toLocaleString('en-IN')}`;
+    }
+    if (typeof serviceRequest?.budgetMin === 'number') {
+      return `₹${serviceRequest.budgetMin.toLocaleString('en-IN')}+`;
+    }
+    return serviceRequest?.requirements?.budget || 'Flexible';
+  }, [serviceRequest]);
+
+  const availableCountText = useMemo(() => {
+    if (matchingSummary) {
+      const nearby = matchingSummary.withinRadius ?? matchingSummary.total ?? 0;
+      const total = matchingSummary.total ?? nearby;
+      return `${nearby} nearby • ${total} citywide`;
+    }
+    return `${filteredTechnicians.length} available`;
+  }, [matchingSummary, filteredTechnicians]);
+
   return (
     <div className="min-h-screen bg-background">
-      <Header 
-        user={mockUser} 
-        location={userLocation?.address}
-        activeService={null}
-      />
+      <Header user={user} location={userLocation.address} activeService={null} />
       <main className="pt-16">
-        {/* Service Request Summary */}
         <div className="bg-card border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
@@ -342,15 +350,14 @@ const TechnicianSelection = () => {
                 </button>
                 <div>
                   <h1 className="text-lg font-semibold text-foreground">
-                    {serviceRequest?.category} - {serviceRequest?.subcategory}
+                    {categoryLabel} {serviceRequest?.requirements?.subcategory ? `• ${serviceRequest.requirements.subcategory}` : ''}
                   </h1>
-                  <p className="text-sm text-muted-foreground">
-                    Budget: ₹{serviceRequest?.budget} • {serviceRequest?.preferredTime}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {serviceRequest?.locationAddress || 'Selected location'} • Budget: {budgetLabel}
                   </p>
                 </div>
               </div>
-              
-              {/* View Toggle (Mobile) */}
+
               <div className="flex items-center space-x-2 lg:hidden">
                 <Button
                   variant={activeView === 'map' ? 'default' : 'ghost'}
@@ -373,57 +380,54 @@ const TechnicianSelection = () => {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Filter Controls */}
-          <div className="mb-6">
-            <FilterControls
-              onFilterChange={handleFilterChange}
-              onSortChange={handleSortChange}
-              totalResults={filteredTechnicians?.length}
-              activeFilters={{}}
-            />
-          </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          {error ? (
+            <div className="bg-warning/10 border border-warning/20 text-warning text-sm px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          ) : null}
 
-          {/* Comparison Bar */}
-          {selectedForComparison?.length > 0 && (
-            <div className="mb-6 bg-primary/10 border border-primary/20 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Icon name="GitCompare" size={18} className="text-primary" />
-                  <span className="text-sm font-medium text-primary">
-                    {selectedForComparison?.length} technician{selectedForComparison?.length > 1 ? 's' : ''} selected for comparison
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleShowComparison}
-                    disabled={selectedForComparison?.length === 0}
-                  >
-                    Compare ({selectedForComparison?.length})
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedForComparison([])}
-                    iconName="X"
-                  />
-                </div>
+          <FilterControls
+            onFilterChange={handleFilterChange}
+            onSortChange={handleSortChange}
+            totalResults={filteredTechnicians.length}
+            activeFilters={activeFilters}
+          />
+
+          {selectedForComparison.length > 0 && (
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Icon name="GitCompare" size={18} className="text-primary" />
+                <span className="text-sm font-medium text-primary">
+                  {selectedForComparison.length} technician{selectedForComparison.length > 1 ? 's' : ''} selected for comparison
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowComparisonModal(true)}
+                  disabled={selectedForComparison.length === 0}
+                >
+                  Compare ({selectedForComparison.length})
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  iconName="X"
+                  onClick={() => setSelectedForComparison([])}
+                />
               </div>
             </div>
           )}
 
-          {/* Main Content */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Map Section */}
             <div className={`${activeView === 'list' ? 'hidden lg:block' : ''}`}>
-              <div className="bg-card border border-border rounded-lg p-4 trust-shadow">
+              <div className="bg-card border border-border rounded-lg p-4 trust-shadow h-full">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-foreground">Nearby Technicians</h2>
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                    <Icon name="MapPin" size={16} />
-                    <span>Within 5 km</span>
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">Nearby Technicians</h2>
+                    <p className="text-xs text-muted-foreground mt-1">{availableCountText}</p>
                   </div>
                 </div>
                 <div className="h-96 lg:h-[600px]">
@@ -437,16 +441,19 @@ const TechnicianSelection = () => {
               </div>
             </div>
 
-            {/* List Section */}
             <div className={`${activeView === 'map' ? 'hidden lg:block' : ''}`}>
-              <div className="bg-card border border-border rounded-lg p-4 trust-shadow">
+              <div className="bg-card border border-border rounded-lg p-4 trust-shadow h-full flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-foreground">Available Technicians</h2>
                   <span className="text-sm text-muted-foreground">
-                    {filteredTechnicians?.length} found
+                    {loading && filteredTechnicians.length === 0
+                      ? 'Loading...'
+                      : loading
+                      ? `Refreshing • ${filteredTechnicians.length} found`
+                      : `${filteredTechnicians.length} found`}
                   </span>
                 </div>
-                <div className="max-h-[600px] overflow-y-auto">
+                <div className="flex-1 overflow-y-auto">
                   <TechnicianList
                     technicians={filteredTechnicians}
                     loading={loading}
@@ -455,6 +462,7 @@ const TechnicianSelection = () => {
                     onBookNow={handleBookNow}
                     onCompare={handleCompare}
                     selectedForComparison={selectedForComparison}
+                    bookingState={bookingState}
                   />
                 </div>
               </div>
@@ -462,15 +470,132 @@ const TechnicianSelection = () => {
           </div>
         </div>
       </main>
-      {/* Comparison Modal */}
+
       {showComparisonModal && (
         <ComparisonModal
           technicians={selectedForComparison}
-          onClose={handleCloseComparison}
+          onClose={() => setShowComparisonModal(false)}
           onBookTechnician={handleBookFromComparison}
           onViewProfile={handleViewProfile}
         />
       )}
+      {profileTechnician && (
+        <TechnicianProfileDrawer technician={profileTechnician} onClose={() => setProfileTechnician(null)} />
+      )}
+    </div>
+  );
+};
+
+const TechnicianProfileDrawer = ({ technician, onClose }) => {
+  if (!technician) return null;
+
+  const specialties = technician.specializations || technician.specialtyLabels || [];
+  const rate = Number.isFinite(technician.priceWithSurge)
+    ? technician.priceWithSurge.toLocaleString('en-IN')
+    : Number.isFinite(technician.hourlyRate)
+    ? technician.hourlyRate.toLocaleString('en-IN')
+    : technician.hourlyRate || '—';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4 py-6">
+      <div className="w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">{technician?.name}</h3>
+            <p className="text-xs text-muted-foreground">
+              {technician?.yearsOfExperience || 0} years experience • Responds in {technician?.responseTime}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-smooth"
+          >
+            <Icon name="X" size={18} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+          <section>
+            <h4 className="text-sm font-semibold text-foreground mb-2">Service Overview</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
+              <div>
+                <p>Hourly rate</p>
+                <p className="text-foreground font-medium">₹{rate}</p>
+              </div>
+              <div>
+                <p>Availability</p>
+                <p className="flex items-center gap-1">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      technician?.availability === 'available' ? 'bg-success' : 'bg-muted-foreground'
+                    }`}
+                  ></span>
+                  {technician?.availability === 'available' ? 'Available now' : 'Currently busy'}
+                </p>
+              </div>
+              <div>
+                <p>Rating</p>
+                <p className="text-foreground font-medium">
+                  {technician?.rating} ({technician?.reviewCount || 0} reviews)
+                </p>
+              </div>
+              <div>
+                <p>Service radius</p>
+                <p className="text-foreground font-medium">{technician?.serviceRadius || 0} km</p>
+              </div>
+            </div>
+          </section>
+
+          {specialties?.length ? (
+            <section>
+              <h4 className="text-sm font-semibold text-foreground mb-2">Specialties</h4>
+              <div className="flex flex-wrap gap-2">
+                {specialties.map((item) => (
+                  <span
+                    key={item}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {technician?.bio ? (
+            <section>
+              <h4 className="text-sm font-semibold text-foreground mb-2">About</h4>
+              <p className="text-sm text-muted-foreground leading-6 whitespace-pre-line">
+                {technician.bio}
+              </p>
+            </section>
+          ) : null}
+
+          <section>
+            <h4 className="text-sm font-semibold text-foreground mb-2">Metrics</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
+              <div>
+                <p>Total jobs</p>
+                <p className="text-foreground font-medium">{technician?.totalJobs || 0}</p>
+              </div>
+              <div>
+                <p>Response time</p>
+                <p className="text-foreground font-medium">{technician?.responseTime}</p>
+              </div>
+              <div>
+                <p>Average ETA</p>
+                <p className="text-foreground font-medium">{technician?.eta ?? '—'}</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

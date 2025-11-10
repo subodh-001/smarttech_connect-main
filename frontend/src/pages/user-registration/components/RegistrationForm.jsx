@@ -11,6 +11,10 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
     fullName: '',
     email: '',
     phone: '',
+    address: '',
+    city: '',
+    state: '',
+    postalCode: '',
     password: '',
     confirmPassword: '',
     userType: '',
@@ -72,6 +76,31 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
       }
     }
 
+    if (name === 'address' && value) {
+      if (value?.length < 5) {
+        newErrors.address = 'Please enter your complete address';
+      } else {
+        delete newErrors?.address;
+      }
+    }
+
+    if (name === 'city' && value) {
+      if (value?.length < 2) {
+        newErrors.city = 'City name looks too short';
+      } else {
+        delete newErrors?.city;
+      }
+    }
+
+    if (name === 'postalCode' && value) {
+      const pinRegex = /^\d{6}$/;
+      if (!pinRegex?.test(value)) {
+        newErrors.postalCode = 'Enter a valid 6-digit postal code';
+      } else {
+        delete newErrors?.postalCode;
+      }
+    }
+
     if (name === 'password') {
       let strength = calculatePasswordStrength(value);
       setPasswordStrength(strength);
@@ -129,6 +158,24 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
       newErrors.phone = 'Please enter a valid 10-digit mobile number';
     }
 
+    if (!formData?.address?.trim()) {
+      newErrors.address = 'Your address helps us find local technicians';
+    } else if (formData?.address?.length < 5) {
+      newErrors.address = 'Please enter your complete address';
+    }
+
+    if (!formData?.city?.trim()) {
+      newErrors.city = 'City is required';
+    } else if (formData?.city?.length < 2) {
+      newErrors.city = 'City name looks too short';
+    }
+
+    if (!formData?.postalCode?.trim()) {
+      newErrors.postalCode = 'Postal code is required';
+    } else if (!/^\d{6}$/.test(formData?.postalCode)) {
+      newErrors.postalCode = 'Enter a valid 6-digit postal code';
+    }
+
     if (!formData?.password) {
       newErrors.password = 'Password is required';
     } else if (formData?.password?.length < 8) {
@@ -160,8 +207,35 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
   const handleSubmit = (e) => {
     e?.preventDefault();
     if (validateForm()) {
-      onSubmit(formData);
+      const sanitizedData = {
+        ...formData,
+        fullName: formData?.fullName?.trim(),
+        email: formData?.email?.trim().toLowerCase(),
+        phone: formData?.phone?.trim(),
+        address: formData?.address?.trim(),
+        city: formData?.city?.trim(),
+        state: formData?.state?.trim() || '',
+        postalCode: formData?.postalCode?.trim(),
+      };
+      onSubmit(sanitizedData);
     }
+  };
+
+  const handleUserTypeChange = (value) => {
+    setFormData(prev => ({
+      ...prev,
+      userType: value
+    }));
+
+    setErrors(prevErrors => {
+      const updatedErrors = { ...prevErrors };
+      if (!value) {
+        updatedErrors.userType = 'Please select account type';
+      } else {
+        delete updatedErrors?.userType;
+      }
+      return updatedErrors;
+    });
   };
 
   const getPasswordStrengthColor = () => {
@@ -195,6 +269,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
           onChange={handleInputChange}
           error={errors?.fullName}
           required
+          description="Match your government ID so technicians can verify they are meeting the right person."
         />
 
         <Input
@@ -206,6 +281,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
           onChange={handleInputChange}
           error={errors?.email}
           required
+          description="We’ll send booking updates and verification emails here."
         />
 
         <div>
@@ -218,10 +294,57 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
             onChange={handleInputChange}
             error={errors?.phone}
             required
+            description="Use an active number to receive OTPs and technician calls."
           />
           <p className="text-xs text-muted-foreground mt-1">
             We'll send OTP to this number for verification
           </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            label="Address"
+            type="text"
+            name="address"
+            placeholder="House number, street and nearby landmark"
+            value={formData?.address}
+            onChange={handleInputChange}
+            error={errors?.address}
+            required
+            description="Helps us suggest technicians who operate in your neighbourhood."
+          />
+
+          <Input
+            label="City"
+            type="text"
+            name="city"
+            placeholder="Enter your city"
+            value={formData?.city}
+            onChange={handleInputChange}
+            error={errors?.city}
+            required
+          />
+
+          <Input
+            label="State"
+            type="text"
+            name="state"
+            placeholder="Enter your state (optional)"
+            value={formData?.state}
+            onChange={handleInputChange}
+            description="Optional but improves technician matching."
+          />
+
+          <Input
+            label="Postal Code"
+            type="text"
+            name="postalCode"
+            placeholder="6-digit postal code"
+            value={formData?.postalCode}
+            onChange={handleInputChange}
+            error={errors?.postalCode}
+            required
+          />
         </div>
 
         {/* Account Type Selection */}
@@ -230,7 +353,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
             label="Account Type"
             name="userType"
             value={formData?.userType}
-            onChange={(val) => setFormData(prev => ({ ...prev, userType: val }))}
+            onChange={handleUserTypeChange}
             options={[
               { value: 'user', label: 'User - Seeking services' },
               { value: 'technician', label: 'Technician - Providing services' },
@@ -238,6 +361,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
             placeholder="Select account type"
             required
             error={errors?.userType}
+            description="Choose 'User' if you want to book services or 'Technician' if you want to accept jobs."
           />
           <p className="text-xs text-muted-foreground mt-1">
             Choose whether you'll use SmartTech Connect as a customer or a technician.
@@ -260,6 +384,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
               onChange={handleInputChange}
               error={errors?.password}
               required
+              description="Use at least 8 characters with upper & lower case letters, a number, and a special symbol."
             />
             <button
               type="button"
@@ -295,6 +420,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
             onChange={handleInputChange}
             error={errors?.confirmPassword}
             required
+            description="We double-check to make sure there are no typos in your password."
           />
           <button
             type="button"
@@ -316,6 +442,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
           checked={formData?.agreeToTerms}
           onChange={handleInputChange}
           error={errors?.agreeToTerms}
+          description="Includes cancellation policies, technician etiquette, and payment terms."
         />
         
         <Checkbox
@@ -324,6 +451,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
           checked={formData?.agreeToPrivacy}
           onChange={handleInputChange}
           error={errors?.agreeToPrivacy}
+          description="Explains how SmartTech Connect stores and protects your personal data."
         />
 
         <Checkbox

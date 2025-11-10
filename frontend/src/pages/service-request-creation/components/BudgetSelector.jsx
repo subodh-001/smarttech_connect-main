@@ -14,40 +14,54 @@ const BudgetSelector = ({ budget, onBudgetChange, selectedCategory, selectedSubc
   ];
 
   const marketEstimates = {
-    'plumber': {
+    plumbing: {
       'pipe-repair': { min: 300, max: 800, typical: 500 },
       'tap-installation': { min: 200, max: 600, typical: 400 },
       'toilet-repair': { min: 400, max: 1200, typical: 700 },
       'water-heater': { min: 800, max: 2500, typical: 1500 },
       'drainage-cleaning': { min: 500, max: 1500, typical: 800 }
     },
-    'electrician': {
+    electrical: {
       'wiring-repair': { min: 400, max: 1500, typical: 800 },
       'switch-installation': { min: 150, max: 400, typical: 250 },
       'fan-installation': { min: 300, max: 800, typical: 500 },
       'light-fitting': { min: 200, max: 600, typical: 350 },
       'power-backup': { min: 2000, max: 8000, typical: 4000 }
     },
-    'ac-repair': {
+    hvac: {
       'ac-service': { min: 800, max: 2000, typical: 1200 },
       'ac-installation': { min: 2000, max: 5000, typical: 3000 },
       'ac-gas-refill': { min: 1500, max: 3000, typical: 2000 },
       'ac-repair': { min: 1000, max: 4000, typical: 2000 },
       'ac-uninstallation': { min: 500, max: 1500, typical: 800 }
     },
-    'computer-repair': {
+    appliance_repair: {
       'laptop-repair': { min: 800, max: 3000, typical: 1500 },
       'desktop-repair': { min: 600, max: 2500, typical: 1200 },
       'data-recovery': { min: 1500, max: 5000, typical: 2500 },
-      'virus-removal': { min: 300, max: 800, typical: 500 },
-      'software-installation': { min: 200, max: 600, typical: 350 }
+      'washing-machine': { min: 900, max: 2500, typical: 1500 },
+      'fridge-service': { min: 700, max: 2200, typical: 1300 }
     },
-    'carpenter': {
+    handyman: {
       'furniture-repair': { min: 500, max: 2000, typical: 1000 },
       'door-installation': { min: 1500, max: 4000, typical: 2500 },
       'cabinet-making': { min: 3000, max: 15000, typical: 8000 },
       'wood-polishing': { min: 800, max: 2500, typical: 1500 },
       'custom-furniture': { min: 5000, max: 25000, typical: 12000 }
+    },
+    cleaning: {
+      'home-deep-clean': { min: 1500, max: 4000, typical: 2500 },
+      'kitchen-clean': { min: 800, max: 2000, typical: 1200 },
+      'bathroom-clean': { min: 500, max: 1500, typical: 900 },
+      'sofa-clean': { min: 700, max: 1800, typical: 1100 },
+      'office-clean': { min: 2500, max: 7000, typical: 4000 }
+    },
+    gardening: {
+      'landscaping': { min: 2000, max: 8000, typical: 4000 },
+      'lawn-care': { min: 600, max: 2000, typical: 1200 },
+      'kitchen-garden': { min: 1500, max: 5000, typical: 2500 },
+      'plant-maintenance': { min: 500, max: 1500, typical: 900 },
+      'balcony-garden': { min: 1200, max: 3500, typical: 2000 }
     }
   };
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import ServiceRequest from '../models/ServiceRequest.js';
 import authMiddleware from '../middleware/auth.js';
+import { findAvailableTechnicians } from '../services/technicianMatching.js';
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ const formatServiceRequest = (request) => {
   const customerUser = doc.customerId || doc.customer;
 
   return {
-    id: doc._id,
+    id: doc._id ? doc._id.toString() : undefined,
     category: doc.category,
     title: doc.title,
     description: doc.description,
@@ -31,7 +32,7 @@ const formatServiceRequest = (request) => {
     updatedAt: doc.updatedAt,
     customer: customerUser
       ? {
-          id: customerUser._id,
+          id: customerUser._id ? customerUser._id.toString() : undefined,
           name: customerUser.fullName || customerUser.email,
           email: customerUser.email,
           phone: customerUser.phone,
@@ -39,7 +40,7 @@ const formatServiceRequest = (request) => {
       : null,
     technician: technicianUser
       ? {
-          id: technicianUser._id,
+          id: technicianUser._id ? technicianUser._id.toString() : undefined,
           name: technicianUser.fullName || technicianUser.email,
           email: technicianUser.email,
           phone: technicianUser.phone,
@@ -55,18 +56,17 @@ router.get('/available', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Only technicians can view available requests' });
     }
 
+    const technicianId = req.user.sub;
     const requests = await ServiceRequest.find({
-      $and: [
-        {
-          $or: [
-            { technicianId: { $exists: false } },
-            { technicianId: null },
-          ],
-        },
-        { status: { $in: ['pending'] } },
+      status: { $in: ['pending'] },
+      $or: [
+        { technicianId: { $exists: false } },
+        { technicianId: null },
+        { technicianId },
       ],
     })
       .populate('customerId', 'fullName email phone')
+      .populate('technicianId', 'fullName email phone')
       .sort({ createdAt: -1 })
       .limit(50);
 
@@ -128,7 +128,20 @@ router.post('/', authMiddleware, async (req, res) => {
       .populate('technicianId', 'fullName email phone avatarUrl')
       .populate('customerId', 'fullName email phone');
 
-    res.status(201).json(formatServiceRequest(populated));
+    const location = populated.locationCoordinates || {};
+    const matching = await findAvailableTechnicians({
+      category: populated.category,
+      lat: typeof location.lat === 'number' ? location.lat : undefined,
+      lng: typeof location.lng === 'number' ? location.lng : undefined,
+      radiusInKm: payload.radiusInKm || undefined,
+      limit: 25,
+    });
+
+    res.status(201).json({
+      request: formatServiceRequest(populated),
+      matchingTechnicians: matching.technicians,
+      matchingSummary: matching.summary,
+    });
   } catch (error) {
     console.error('Failed to create service request:', error);
     res.status(500).json({ error: 'Failed to create service request' });

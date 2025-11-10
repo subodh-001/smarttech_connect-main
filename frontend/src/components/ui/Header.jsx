@@ -28,15 +28,7 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
   if (role === 'technician') {
     navigationItems = [];
   } else if (role === 'admin') {
-    navigationItems = [
-      { label: 'Overview', path: '/admin-dashboard', icon: 'Home' },
-      { label: 'Users', path: '/admin-dashboard?tab=users', icon: 'Users' },
-      { label: 'Technicians', path: '/admin-dashboard?tab=technicians', icon: 'Wrench' },
-      { label: 'Services', path: '/admin-dashboard?tab=services', icon: 'Tool' },
-      { label: 'Approvals', path: '/admin-dashboard?tab=approvals', icon: 'CheckCircle' },
-      { label: 'Reports', path: '/admin-dashboard?tab=reports', icon: 'BarChart2' },
-      { label: 'Settings', path: '/admin-dashboard?tab=settings', icon: 'Settings' },
-    ];
+    navigationItems = [];
   } else {
     navigationItems = [
       { label: 'Dashboard', path: '/user-dashboard', icon: 'LayoutDashboard' },

@@ -118,8 +118,8 @@ const Select = React.forwardRef(({
                     id={selectId}
                     type="button"
                     className={cn(
-                        "flex h-10 w-full items-center justify-between rounded-md border border-input bg-white text-black px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-                        error && "border-destructive focus:ring-destructive",
+                        "flex h-11 w-full items-center justify-between rounded-md border border-border bg-background text-foreground px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:border-black focus-visible:bg-background focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                        error && "border-destructive focus-visible:ring-destructive focus-visible:border-destructive focus-visible:bg-destructive/10",
                         !hasValue && "text-muted-foreground"
                     )}
                     onClick={handleToggle}

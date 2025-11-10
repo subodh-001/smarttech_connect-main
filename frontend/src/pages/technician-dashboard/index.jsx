@@ -143,9 +143,9 @@ const buildNotifications = (available, active, completed) => {
       id: `completed-${request.id}`,
       type: 'payment',
       title: 'Payment ready for withdrawal',
-      message: `${request.title} • ${formatClockTime(request.completionDate)} • ₹${
+      message: `${request.title} • ${formatClockTime(request.completionDate)} • ₹${(
         request.finalCost ?? request.budgetMax ?? request.budgetMin ?? 0
-      }`,
+      ).toLocaleString('en-IN')}`,
       timeAgo: formatRelativeTime(request.completionDate || request.updatedAt),
       read: false,
       priority: 'low',
@@ -161,7 +161,7 @@ const mapAvailableRequest = (request) => ({
   title: request.title,
   category: request.category,
   location: request.locationAddress,
-  distance: request.locationCoordinates ? '' : '',
+  coordinates: request.locationCoordinates || null,
   budget: request.budgetMax ?? request.budgetMin ?? 0,
   urgency: request.priority ?? 'medium',
   customerRating: request.reviewRating ?? '—',
@@ -169,6 +169,8 @@ const mapAvailableRequest = (request) => ({
   description: request.description,
   timeAgo: formatRelativeTime(request.createdAt),
   applicants: request.applicants ?? 0,
+  assignedToYou: Boolean(request.technician && request.technician.id),
+  customer: request.customer,
 });
 
 const mapActiveRequest = (request) => ({
@@ -177,6 +179,7 @@ const mapActiveRequest = (request) => ({
   customerName: request.customer?.name || 'Customer',
   status: request.status?.replace('_', '-'),
   address: request.locationAddress,
+  coordinates: request.locationCoordinates || null,
   startTime: request.scheduledDate ? formatClockTime(request.scheduledDate) : '—',
   amount: request.finalCost ?? request.budgetMax ?? request.budgetMin ?? 0,
   customerPhone: request.customer?.phone || '—',
@@ -209,6 +212,7 @@ const TechnicianDashboard = () => {
   const [appointments, setAppointments] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [earningsData, setEarningsData] = useState(null);
+  const [technicianLocation, setTechnicianLocation] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState(null);
 
@@ -285,6 +289,38 @@ const TechnicianDashboard = () => {
     fetchDashboardData();
   }, [fetchDashboardData, location.key]);
 
+  useEffect(() => {
+    if (!('geolocation' in navigator)) return;
+    let isMounted = true;
+
+    const updateLocation = (position) => {
+      if (!isMounted) return;
+      setTechnicianLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      });
+    };
+
+    navigator.geolocation.getCurrentPosition(updateLocation, () => {}, {
+      enableHighAccuracy: true,
+      timeout: 8000,
+      maximumAge: 60000,
+    });
+
+    const watchId = navigator.geolocation.watchPosition(updateLocation, () => {}, {
+      enableHighAccuracy: true,
+      timeout: 8000,
+      maximumAge: 60000,
+    });
+
+    return () => {
+      isMounted = false;
+      if (watchId != null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, []);
+
   const handleTabChange = (tabKey) => {
     setSearchParams({ tab: tabKey });
   };
@@ -356,9 +392,29 @@ const TechnicianDashboard = () => {
     console.log('Initiating withdrawal');
   };
 
-  const handleNavigateToJob = (jobId) => {
-    console.log('Navigate to job:', jobId);
-  };
+  const handleNavigateToJob = useCallback(
+    (job) => {
+      if (!job) return;
+      const coords = job.coordinates;
+      let url;
+      if (coords?.lat && coords?.lng) {
+        const destination = `${coords.lat},${coords.lng}`;
+        const origin =
+          technicianLocation?.lat && technicianLocation?.lng
+            ? `${technicianLocation.lat},${technicianLocation.lng}`
+            : null;
+        url = origin
+          ? `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`
+          : `https://www.google.com/maps/search/?api=1&query=${destination}`;
+      } else if (job.address) {
+        url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}`;
+      } else {
+        url = 'https://www.google.com/maps';
+      }
+      window.open(url, '_blank', 'noopener');
+    },
+    [technicianLocation]
+  );
 
   const handleContactCustomer = (jobId, method = 'call') => {
     if (method === 'message') {
@@ -506,6 +562,7 @@ const TechnicianDashboard = () => {
                         onDecline={handleDeclineJob}
                         disableAccept={!isKycApproved}
                         disableReason="Finish verification to accept jobs."
+                        technicianLocation={technicianLocation}
                       />
                     ))}
                   </div>
@@ -560,6 +617,7 @@ const TechnicianDashboard = () => {
                     onDecline={handleDeclineJob}
                     disableAccept={!isKycApproved}
                     disableReason="Finish verification to accept jobs."
+                    technicianLocation={technicianLocation}
                   />
                 ))}
               </div>
@@ -575,6 +633,7 @@ const TechnicianDashboard = () => {
               onNavigate={handleNavigateToJob}
               onContactCustomer={handleContactCustomer}
               onUpdateStatus={handleUpdateJobStatus}
+              technicianLocation={technicianLocation}
             />
           </div>
         )}

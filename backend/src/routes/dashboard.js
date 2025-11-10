@@ -2,6 +2,7 @@ import express from 'express';
 import authMiddleware from '../middleware/auth.js';
 import ServiceRequest from '../models/ServiceRequest.js';
 import User from '../models/User.js';
+import Technician from '../models/Technician.js';
 
 const router = express.Router();
 
@@ -149,6 +150,95 @@ router.get('/user', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Failed to load user dashboard:', error);
     res.status(500).json({ error: 'Failed to load dashboard data' });
+  }
+});
+
+router.get('/admin', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can access this dashboard' });
+    }
+
+    const limit = Math.min(Number.parseInt(req.query.limit, 10) || 5, 20);
+
+    const [
+      totalUsers,
+      totalTechnicians,
+      activeServicesCount,
+      pendingApprovalCount,
+      revenueAgg,
+      users,
+      services,
+      pendingTechs,
+    ] = await Promise.all([
+      User.countDocuments(),
+      Technician.countDocuments(),
+      ServiceRequest.countDocuments({ status: { $in: activeStatuses } }),
+      Technician.countDocuments({ kycStatus: { $in: ['not_submitted', 'under_review'] } }),
+      ServiceRequest.aggregate([
+        { $match: { status: 'completed' } },
+        { $group: { _id: null, total: { $sum: { $ifNull: ['$finalCost', 0] } } } },
+      ]),
+      User.find().sort({ createdAt: -1 }).limit(limit).lean(),
+      ServiceRequest.find()
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .populate('customerId', 'fullName email')
+        .populate('technicianId', 'fullName email')
+        .lean(),
+      Technician.find({ kycStatus: { $in: ['not_submitted', 'under_review'] } })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .populate('userId', 'fullName email phone')
+        .lean(),
+    ]);
+
+    const totalRevenue = revenueAgg[0]?.total || 0;
+
+    const recentUsers = users.map((userDoc) => ({
+      id: userDoc._id,
+      name: userDoc.fullName || userDoc.email,
+      email: userDoc.email,
+      role: userDoc.role,
+      status: userDoc.isActive === false ? 'inactive' : 'active',
+      joinedDate: userDoc.createdAt,
+    }));
+
+    const recentServices = services.map((serviceDoc) => ({
+      id: serviceDoc._id,
+      service: serviceDoc.title || serviceDoc.category,
+      customer: serviceDoc.customerId ? serviceDoc.customerId.fullName || serviceDoc.customerId.email : 'Customer',
+      technician: serviceDoc.technicianId ? serviceDoc.technicianId.fullName || serviceDoc.technicianId.email : 'Unassigned',
+      status: serviceDoc.status,
+      date: serviceDoc.updatedAt,
+      amount: serviceDoc.finalCost || serviceDoc.budgetMax || serviceDoc.budgetMin || 0,
+    }));
+
+    const pendingApprovals = pendingTechs.map((techDoc) => ({
+      id: techDoc._id,
+      name: techDoc.userId?.fullName || techDoc.userId?.email || 'Technician',
+      email: techDoc.userId?.email || null,
+      services: techDoc.specialties || [],
+      documents: [techDoc.kycGovernmentDocumentPath, techDoc.kycSelfieDocumentPath].filter(Boolean).length,
+      submittedDate: techDoc.kycSubmittedAt || techDoc.createdAt,
+      phone: techDoc.userId?.phone || null,
+    }));
+
+    res.json({
+      stats: {
+        totalUsers,
+        totalTechnicians,
+        activeServices: activeServicesCount,
+        pendingApprovals: pendingApprovalCount,
+        totalRevenue,
+      },
+      recentUsers,
+      recentServices,
+      pendingApprovals,
+    });
+  } catch (error) {
+    console.error('Failed to load admin dashboard:', error);
+    res.status(500).json({ error: 'Failed to load admin dashboard data' });
   }
 });
 

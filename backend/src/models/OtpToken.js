@@ -2,7 +2,8 @@ import mongoose from 'mongoose';
 
 const OtpTokenSchema = new mongoose.Schema(
   {
-    email: { type: String, required: true, unique: true, index: true },
+    email: { type: String, required: true, index: true },
+    purpose: { type: String, default: 'generic', index: true },
     otpHash: { type: String, required: true },
     expiresAt: { type: Date, required: true, index: true },
     attempts: { type: Number, default: 0 },
@@ -12,6 +13,7 @@ const OtpTokenSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+OtpTokenSchema.index({ email: 1, purpose: 1 }, { unique: true });
 OtpTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export default mongoose.model('OtpToken', OtpTokenSchema);

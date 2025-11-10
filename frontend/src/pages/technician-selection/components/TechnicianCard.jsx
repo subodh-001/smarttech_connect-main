@@ -125,7 +125,14 @@ const TechnicianCard = ({ technician, onViewProfile, onSendMessage, onBookNow, o
       {/* Pricing */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          <span className="text-lg font-semibold text-foreground">₹{technician?.hourlyRate}</span>
+          <span className="text-lg font-semibold text-foreground">
+            ₹
+            {Number.isFinite(technician?.priceWithSurge)
+              ? technician.priceWithSurge.toLocaleString('en-IN')
+              : Number.isFinite(technician?.hourlyRate)
+              ? technician.hourlyRate.toLocaleString('en-IN')
+              : technician?.hourlyRate}
+          </span>
           <span className="text-sm text-muted-foreground">/hour</span>
         </div>
         <div className="flex items-center space-x-2">
@@ -210,10 +217,14 @@ const TechnicianCard = ({ technician, onViewProfile, onSendMessage, onBookNow, o
           variant="default"
           size="sm"
           onClick={() => onBookNow(technician)}
-          disabled={technician?.availability !== 'available'}
+          disabled={technician?.availability !== 'available' || isBooking}
           className="flex-1"
         >
-          {technician?.availability === 'available' ? 'Book Now' : 'Unavailable'}
+          {isBooking
+            ? 'Sending...'
+            : technician?.availability === 'available'
+            ? 'Request Booking'
+            : 'Unavailable'}
         </Button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Select from '../../../components/ui/Select';
@@ -14,6 +14,12 @@ const FilterControls = ({ onFilterChange, onSortChange, totalResults, activeFilt
     verified: false,
     responseTime: 'all'
   });
+
+  useEffect(() => {
+    if (activeFilters) {
+      setFilters((prev) => ({ ...prev, ...activeFilters }));
+    }
+  }, [activeFilters]);
 
   const sortOptions = [
     { value: 'distance', label: 'Distance (Nearest)' },

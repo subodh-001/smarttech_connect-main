@@ -17,6 +17,7 @@ import TechnicianOnboarding from './pages/technician-onboarding';
 import AdminDashboard from './pages/admin-dashboard';
 import BookingManagement from './pages/booking-management';
 import ChatCommunication from './pages/chat-communication';
+import ForgotPassword from './pages/forgot-password';
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const Routes = () => {
@@ -33,6 +34,7 @@ const Routes = () => {
         <Route path="/service-request-creation" element={<ProtectedRoute allowedRoles={["user"]}><ServiceRequestCreation /></ProtectedRoute>} />
         <Route path="/technician-selection" element={<ProtectedRoute allowedRoles={["user"]}><TechnicianSelection /></ProtectedRoute>} />
         <Route path="/user-registration" element={<UserRegistration />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/user-profile" element={<ProtectedRoute allowedRoles={["user","technician"]}><UserProfile /></ProtectedRoute>} />
         <Route path="/account" element={<ProtectedRoute allowedRoles={["user","technician"]}><UserProfile /></ProtectedRoute>} />
         <Route path="/technician-onboarding" element={<TechnicianOnboarding />} />

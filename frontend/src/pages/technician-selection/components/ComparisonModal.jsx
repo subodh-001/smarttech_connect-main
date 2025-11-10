@@ -94,7 +94,15 @@ const ComparisonModal = ({ technicians, onClose, onBookTechnician, onViewProfile
                     {/* Hourly Rate */}
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Rate:</span>
-                      <span className="text-sm font-semibold text-foreground">₹{technician?.hourlyRate}/hr</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        ₹
+                        {Number.isFinite(technician?.priceWithSurge)
+                          ? technician.priceWithSurge.toLocaleString('en-IN')
+                          : Number.isFinite(technician?.hourlyRate)
+                          ? technician.hourlyRate.toLocaleString('en-IN')
+                          : technician?.hourlyRate}
+                        /hr
+                      </span>
                     </div>
 
                     {/* Experience */}
@@ -179,7 +187,7 @@ const ComparisonModal = ({ technicians, onClose, onBookTechnician, onViewProfile
                       disabled={technician?.availability !== 'available'}
                       className="w-full"
                     >
-                      {technician?.availability === 'available' ? 'Book Now' : 'Unavailable'}
+                      {technician?.availability === 'available' ? 'Request Booking' : 'Unavailable'}
                     </Button>
                   </div>
                 </div>

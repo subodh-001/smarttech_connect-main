@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const TechnicianSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
-    specialties: [{ type: String }],
+    specialties: [{ type: String, index: true }],
     yearsOfExperience: { type: Number, default: 0 },
     hourlyRate: { type: Number, default: 0 },
     averageRating: { type: Number, default: 0 },
@@ -13,6 +13,12 @@ const TechnicianSchema = new mongoose.Schema(
     serviceRadius: { type: Number, default: 10 },
     currentStatus: { type: String, enum: ['available', 'busy', 'offline'], default: 'offline' },
     lastLocation: { type: Object },
+    responseTimeMinutes: { type: Number, default: 10 },
+    recentReview: {
+      rating: { type: Number },
+      customerName: { type: String },
+      comment: { type: String },
+    },
     kycStatus: {
       type: String,
       enum: ['not_submitted', 'under_review', 'approved', 'rejected'],
@@ -28,6 +34,8 @@ const TechnicianSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+TechnicianSchema.index({ specialties: 1 });
 
 export default mongoose.model('Technician', TechnicianSchema);
 

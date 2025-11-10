@@ -1,9 +1,12 @@
 import React from 'react';
 import Icon from '../../../components/AppIcon';
 
-const ServiceDescription = ({ description, onDescriptionChange }) => {
+const ServiceDescription = ({ description, onDescriptionChange, minLength = 30 }) => {
   const maxLength = 500;
-  const remainingChars = maxLength - description?.length;
+  const remainingChars = maxLength - (description?.length || 0);
+  const trimmedLength = description?.trim()?.length || 0;
+  const meetsMinLength = trimmedLength >= minLength;
+  const charsNeeded = Math.max(0, minLength - trimmedLength);
 
   const helpfulPrompts = [
     "What exactly is the problem?",
@@ -30,7 +33,26 @@ const ServiceDescription = ({ description, onDescriptionChange }) => {
           </div>
         </div>
 
-        {description?.length < 50 && (
+        {trimmedLength < minLength && (
+          <div className="bg-warning/10 border border-warning/20 rounded-lg p-4">
+            <div className="flex items-start space-x-3">
+              <div className="w-8 h-8 bg-warning/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Icon name="AlertCircle" size={16} className="text-warning" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-warning mb-1">
+                  Add a little more detail
+                </p>
+                <p className="text-xs text-warning/80">
+                  Describe the issue in at least {minLength} characters so technicians know what to expect.
+                  {charsNeeded > 0 ? ` You need about ${charsNeeded} more characters.` : ''}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {trimmedLength < 50 && (
           <div className="bg-muted/50 border border-border rounded-lg p-4">
             <div className="flex items-start space-x-3">
               <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -57,7 +79,7 @@ const ServiceDescription = ({ description, onDescriptionChange }) => {
           </div>
         )}
 
-        {description?.length >= 50 && (
+        {meetsMinLength && (
           <div className="flex items-center space-x-2 text-sm text-success">
             <Icon name="CheckCircle" size={16} />
             <span>Great! Your description looks detailed enough.</span>

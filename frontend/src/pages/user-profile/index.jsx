@@ -118,6 +118,13 @@ const UserProfile = () => {
   const [kycError, setKycError] = useState(null);
   const [kycSuccess, setKycSuccess] = useState(null);
   const [kycFiles, setKycFiles] = useState({ governmentId: null, selfie: null });
+  const [technicianProfile, setTechnicianProfile] = useState(null);
+  const [specialtyOptions, setSpecialtyOptions] = useState([]);
+  const [expertiseForm, setExpertiseForm] = useState(null);
+  const [certificationsInput, setCertificationsInput] = useState('');
+  const [expertiseSaving, setExpertiseSaving] = useState(false);
+  const [expertiseMessage, setExpertiseMessage] = useState(null);
+  const [expertiseError, setExpertiseError] = useState(null);
 
   useEffect(() => {
     if (!loading && user && !userProfile) {
@@ -182,6 +189,38 @@ const UserProfile = () => {
     loadKyc();
   }, [isTechnician]);
 
+  useEffect(() => {
+    if (!isTechnician) {
+      setTechnicianProfile(null);
+      setSpecialtyOptions([]);
+      setExpertiseForm(null);
+      return;
+    }
+
+    const loadTechnicianProfile = async () => {
+      try {
+        const { data } = await axios.get('/api/technicians/me/profile');
+        const profile = data?.technician || {};
+        const options = data?.specialties || [];
+        setTechnicianProfile(profile);
+        setSpecialtyOptions(options);
+        setExpertiseForm({
+          specialties: profile.specialties || [],
+          yearsOfExperience: profile.yearsOfExperience ?? 0,
+          serviceRadius: profile.serviceRadius ?? 10,
+          hourlyRate: profile.hourlyRate ?? 0,
+          bio: profile.bio || '',
+          certifications: profile.certifications || [],
+        });
+        setCertificationsInput((profile.certifications || []).join(', '));
+      } catch (error) {
+        console.error('Failed to load technician profile:', error);
+      }
+    };
+
+    loadTechnicianProfile();
+  }, [isTechnician]);
+
   const memberSince = useMemo(() => {
     if (!userProfile?.created_at && !userProfile?.createdAt) return null;
     const source = userProfile.created_at ?? userProfile.createdAt;
@@ -233,6 +272,84 @@ const UserProfile = () => {
       );
     } finally {
       setKycUploading(false);
+    }
+  };
+
+  const toggleSpecialty = (id) => {
+    setExpertiseForm((prev) => {
+      if (!prev) return prev;
+      const set = new Set(prev.specialties || []);
+      if (set.has(id)) {
+        set.delete(id);
+      } else {
+        set.add(id);
+      }
+      return {
+        ...prev,
+        specialties: Array.from(set),
+      };
+    });
+    setExpertiseMessage(null);
+    setExpertiseError(null);
+  };
+
+  const handleExpertiseFieldChange = (field, value) => {
+    setExpertiseForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setExpertiseMessage(null);
+    setExpertiseError(null);
+  };
+
+  const handleExpertiseReset = () => {
+    if (!technicianProfile) return;
+    setExpertiseForm({
+      specialties: technicianProfile.specialties || [],
+      yearsOfExperience: technicianProfile.yearsOfExperience ?? 0,
+      serviceRadius: technicianProfile.serviceRadius ?? 10,
+      hourlyRate: technicianProfile.hourlyRate ?? 0,
+      bio: technicianProfile.bio || '',
+      certifications: technicianProfile.certifications || [],
+    });
+    setCertificationsInput((technicianProfile.certifications || []).join(', '));
+    setExpertiseMessage(null);
+    setExpertiseError(null);
+  };
+
+  const handleExpertiseSave = async () => {
+    if (!expertiseForm) return;
+    if (!expertiseForm.specialties || expertiseForm.specialties.length === 0) {
+      setExpertiseError('Select at least one service you provide.');
+      return;
+    }
+
+    setExpertiseSaving(true);
+    setExpertiseMessage(null);
+    setExpertiseError(null);
+
+    try {
+      const payload = {
+        ...expertiseForm,
+        certifications: certificationsInput
+          ? certificationsInput.split(',').map((item) => item.trim()).filter(Boolean)
+          : [],
+      };
+      const { data } = await axios.put('/api/technicians/me/profile', payload);
+      const profile = data?.technician || payload;
+      setTechnicianProfile(profile);
+      setExpertiseForm({
+        specialties: profile.specialties || [],
+        yearsOfExperience: profile.yearsOfExperience ?? 0,
+        serviceRadius: profile.serviceRadius ?? 10,
+        hourlyRate: profile.hourlyRate ?? 0,
+        bio: profile.bio || '',
+        certifications: profile.certifications || [],
+      });
+      setCertificationsInput((profile.certifications || []).join(', '));
+      setExpertiseMessage('Service expertise updated successfully.');
+    } catch (error) {
+      console.error('Failed to update technician profile:', error);
+      setExpertiseError(error.response?.data?.error || 'Failed to update expertise. Please try again.');
+    } finally {
+      setExpertiseSaving(false);
     }
   };
 
@@ -410,7 +527,7 @@ const UserProfile = () => {
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
                       <a
-                        href={kycInfo.documents.governmentId}
+                        href={resolveDocumentUrl(kycInfo.documents.governmentId)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-500"
@@ -419,7 +536,7 @@ const UserProfile = () => {
                       </a>
                       {kycInfo.documents.selfie ? (
                         <a
-                          href={kycInfo.documents.selfie}
+                          href={resolveDocumentUrl(kycInfo.documents.selfie)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-500"
@@ -513,6 +630,126 @@ const UserProfile = () => {
                     : 'Verification is complete. You can re-submit documents by contacting support if any detail changes.'}
                 </div>
               )}
+            </div>
+          </section>
+        )}
+
+        {isTechnician && expertiseForm && (
+          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-2">
+              <h2 className="text-lg font-semibold text-slate-900">Service expertise</h2>
+              <p className="text-sm text-slate-600">
+                Choose the services you offer so customers can book you for the right jobs. This also helps us
+                match new requests with your skills.
+              </p>
+            </div>
+
+            {expertiseError ? (
+              <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                {expertiseError}
+              </div>
+            ) : null}
+            {expertiseMessage ? (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                {expertiseMessage}
+              </div>
+            ) : null}
+
+            <div className="mt-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                Select specialties
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {specialtyOptions.map((option) => {
+                  const selected = expertiseForm.specialties?.includes(option.id);
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => toggleSpecialty(option.id)}
+                      className={`rounded-lg border px-4 py-3 text-left hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        selected ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-700'
+                      }`}
+                    >
+                      <p className="text-sm font-medium">{option.label}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {selected ? 'Added to your services' : 'Tap to add this service'}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Experience (years)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={60}
+                  value={expertiseForm.yearsOfExperience}
+                  onChange={(event) =>
+                    handleExpertiseFieldChange('yearsOfExperience', Number(event.target.value))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service radius (km)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={expertiseForm.serviceRadius}
+                  onChange={(event) =>
+                    handleExpertiseFieldChange('serviceRadius', Number(event.target.value))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hourly rate (₹)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={10000}
+                  value={expertiseForm.hourlyRate}
+                  onChange={(event) => handleExpertiseFieldChange('hourlyRate', Number(event.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">About your services</label>
+                <textarea
+                  value={expertiseForm.bio}
+                  onChange={(event) => handleExpertiseFieldChange('bio', event.target.value)}
+                  rows={4}
+                  className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  placeholder="Tell customers about your expertise, brands you support, or any unique offerings."
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Certifications (comma separated)
+                </label>
+                <textarea
+                  value={certificationsInput}
+                  onChange={(event) => setCertificationsInput(event.target.value)}
+                  rows={4}
+                  className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  placeholder="e.g. Blue Star AC Pro, Certified Plumber, ISO cleaning partner"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button variant="outline" onClick={handleExpertiseReset} disabled={expertiseSaving}>
+                Reset
+              </Button>
+              <Button onClick={handleExpertiseSave} loading={expertiseSaving} disabled={expertiseSaving}>
+                Save expertise
+              </Button>
             </div>
           </section>
         )}
@@ -726,3 +963,12 @@ const ToggleRow = ({ label, description, checked, onChange }) => (
 );
 
 export default UserProfile;
+const resolveDocumentUrl = (url) => {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const apiBase =
+    import.meta.env.VITE_BACKEND_URL ||
+    import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') ||
+    (window.location.origin.includes('localhost:5173') ? 'http://localhost:5000' : window.location.origin);
+  return `${apiBase.replace(/\/$/, '')}${url}`;
+};

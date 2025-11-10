@@ -17,7 +17,7 @@ const UserRegistration = () => {
     const response = await fetch('/api/auth/send-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: data.email, fullName: data.fullName }),
+      body: JSON.stringify({ email: data.email, fullName: data.fullName, purpose: 'registration' }),
     });
     const result = await response.json();
     if (!response.ok) {
@@ -50,24 +50,39 @@ const UserRegistration = () => {
     }
   };
 
-  const handleGoogleSignIn = async (googleUserData) => {
+  const handleGoogleSignIn = async ({ code, mockProfile }) => {
+    if (!code && !mockProfile) {
+      alert('Google sign-in failed to provide authentication details. Please try again.');
+      return;
+    }
+
     setIsLoading(true);
     
     try {
-      // Mock Google sign-in process
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const payload = mockProfile ? { mockProfile } : { code };
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to sign in with Google.');
+      }
+
+      if (result?.token) {
+        localStorage.setItem('authToken', result.token);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${result.token}`;
+      }
       
-      // For Google sign-in, we might skip OTP verification
-      // and go directly to dashboard or role-specific onboarding
-      console.log('Google sign-in successful:', googleUserData);
-      
-      if (googleUserData?.userType === 'technician') {
+      if (result?.user?.role === 'technician') {
         navigate('/technician-onboarding');
       } else {
         navigate('/user-dashboard');
       }
     } catch (error) {
       console.error('Google sign-in failed:', error);
+      alert(error?.message || 'We could not complete Google sign-in. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -84,7 +99,7 @@ const UserRegistration = () => {
       const verifyResponse = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: registrationData.email, otp }),
+        body: JSON.stringify({ email: registrationData.email, otp, purpose: 'registration' }),
       });
       const verifyResult = await verifyResponse.json();
       if (!verifyResponse.ok) {
@@ -99,6 +114,7 @@ const UserRegistration = () => {
         role: registrationData.userType === 'technician' ? 'technician' : 'user',
         address: registrationData.address || '',
         city: registrationData.city || '',
+        state: registrationData.state || '',
         postalCode: registrationData.postalCode || '',
       };
 

@@ -178,7 +178,12 @@ const CalendarView = ({ appointments, onBlockTime, onManageAppointment }) => {
                     </div>
                     <div className="flex items-center space-x-1">
                       <Icon name="DollarSign" size={14} />
-                      <span>${appointment?.amount}</span>
+              <span>
+                ₹
+                {Number.isFinite(appointment?.amount)
+                  ? appointment.amount.toLocaleString('en-IN')
+                  : appointment?.amount}
+              </span>
                     </div>
                   </div>
 

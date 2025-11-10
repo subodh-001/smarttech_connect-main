@@ -51,7 +51,12 @@ const EarningsPanel = ({ earningsData, onWithdraw }) => {
             <Icon name="DollarSign" size={20} color="var(--color-success)" />
             <span className="text-sm font-medium text-success">Total Earned</span>
           </div>
-          <p className="text-2xl font-bold text-success">₹{currentEarnings?.total}</p>
+          <p className="text-2xl font-bold text-success">
+            ₹
+            {Number.isFinite(currentEarnings?.total)
+              ? currentEarnings.total.toLocaleString('en-IN')
+              : currentEarnings?.total}
+          </p>
         </div>
 
         <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
@@ -67,7 +72,12 @@ const EarningsPanel = ({ earningsData, onWithdraw }) => {
             <Icon name="TrendingUp" size={20} color="var(--color-accent)" />
             <span className="text-sm font-medium text-accent">Avg per Job</span>
           </div>
-          <p className="text-2xl font-bold text-accent">₹{currentEarnings?.avgPerJob}</p>
+          <p className="text-2xl font-bold text-accent">
+            ₹
+            {Number.isFinite(currentEarnings?.avgPerJob)
+              ? currentEarnings.avgPerJob.toLocaleString('en-IN')
+              : currentEarnings?.avgPerJob}
+          </p>
         </div>
       </div>
       {/* Performance Metrics */}
@@ -125,7 +135,12 @@ const EarningsPanel = ({ earningsData, onWithdraw }) => {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-text-secondary">Available Balance</p>
-            <p className="text-lg font-semibold text-text-primary">₹{earningsData?.availableBalance}</p>
+            <p className="text-lg font-semibold text-text-primary">
+              ₹
+              {Number.isFinite(earningsData?.availableBalance)
+                ? earningsData.availableBalance.toLocaleString('en-IN')
+                : earningsData?.availableBalance}
+            </p>
           </div>
           <Icon name="Wallet" size={24} color="var(--color-primary)" />
         </div>

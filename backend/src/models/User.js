@@ -11,7 +11,10 @@ const UserSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true },
     address: { type: String },
     city: { type: String },
-    postalCode: { type: String }
+    state: { type: String },
+    postalCode: { type: String },
+    googleId: { type: String, index: true },
+    authProvider: { type: String, enum: ['local', 'google'], default: 'local' }
   },
   { timestamps: true }
 );

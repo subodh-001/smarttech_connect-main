@@ -32,12 +32,14 @@ It combines a responsive React (Vite) frontend, a Node/Express REST API, and Mon
 - **Dynamic dashboard** – live service history, booking stats, spending insights, and recommended services.
 - **Service request management** – create, view, and track bookings with technician status updates.
 - **Help Center & Support** – searchable articles plus support ticket submission that hits the backend.
+- **Real-time availability** – live map and counts of nearby technicians before confirming a request.
 
 ### Technician Experience
 - **Profile & KYC** – upload government ID + selfie, track review state, and meet compliance before accepting work.
 - **Availability control** – toggle online/offline, update working hours, track active jobs.
 - **Job pipeline** – browse available requests, accept/decline jobs (post-KYC approval), and monitor earnings.
 - **Schedule view** – prioritised link in the profile dropdown for rapid planning.
+- **Live queue updates** – dashboard polling keeps new job notifications and counts in sync.
 
 ### Platform Operations
 - **Role-based JWT auth** with reusable middleware.
@@ -170,15 +172,25 @@ PORT=5000                            # Optional override
 
 ## Demo Accounts & Seed Data
 
-On startup the backend seeds demo users and service requests:
+If you want sample data, start the backend with the environment variable `ENABLE_DEMO_SEED=true`. When that flag is present the server inserts the following demo users and service requests:
 
 | Role        | Email                     | Password     | Notes                                           |
 |-------------|---------------------------|--------------|-------------------------------------------------|
 | Customer    | `demo.user@example.com`   | `Demo@12345` | Pre-populated dashboard bookings                |
 | Technician  | `demo.tech@example.com`   | `Demo@12345` | KYC status defaults to `not_submitted`          |
-| Admin       | `demo.admin@example.com`  | `Demo@12345` | Included for future admin tooling               |
+| Admin       | `demo.admin@example.com`  | `Demo@12345` | Only created when `ENABLE_DEMO_SEED=true`       |
 
-Technician KYC documents are cleared unless the status is `approved`, ensuring realistic onboarding.
+With the flag disabled the backend removes those demo records on startup so dashboards stay clean. Technician KYC documents are cleared unless the status is `approved`, ensuring realistic onboarding.
+
+### Creating a permanent admin account
+
+1. Register a normal account through the UI (or ensure the target email is unused).
+2. From the `backend/` directory run:
+   ```
+   npm run create-admin -- your-admin@example.com StrongPass123 "Your Name"
+   ```
+   The script uses `MONGODB_URI` to connect, creates the user if needed, or upgrades the existing account to `admin` and updates the password hash.
+3. Sign in with the new credentials. This account persists regardless of the demo seed flag.
 
 ---
 
@@ -190,6 +202,7 @@ Key REST endpoints (all prefixed with `/api`):
 |---------------------------------------------|-------------------------------------------------------------|
 | `POST /api/auth/send-otp`                   | Issue OTP to email (Nodemailer-backed)                      |
 | `POST /api/auth/verify-otp`                 | Validate OTP prior to registration                          |
+| `POST /api/auth/password-reset/confirm`     | Verify reset code and update password                       |
 | `POST /api/auth/register` / `POST /login`   | Create or authenticate accounts                             |
 | `GET /api/users/me`                         | Authenticated user profile                                  |
 | `PUT /api/users/me`                         | Update profile & address data                               |
@@ -206,6 +219,7 @@ Key REST endpoints (all prefixed with `/api`):
 | `POST /api/help-center/articles/:id/feedback` | Track helpful/not helpful feedback                        |
 | `POST /api/support/tickets`                 | Submit support ticket (authenticated optional)              |
 | `GET /api/support/tickets`                  | List user’s submitted tickets (auth required)               |
+| `GET /api/technicians/available`            | Find active technicians by category/location for matching   |
 
 All protected routes require the `Authorization: Bearer <token>` header. The JWT payload encodes `sub` (user id), `role`, and `email`.
 
@@ -218,6 +232,7 @@ All protected routes require the `Authorization: Bearer <token>` header. The JWT
 | `/`                           | Redirect based on auth role (user/technician/admin) |
 | `/user-login`                 | Shared login screen                               |
 | `/user-registration`          | Registration + OTP flow                           |
+| `/forgot-password`            | Request reset code and set a new password         |
 | `/user-dashboard`             | Customer dashboard (requires role `user`)         |
 | `/user-profile` `/account`    | Profile manager, KYC UI, notifications            |
 | `/service-request-creation`   | Create new request                                |

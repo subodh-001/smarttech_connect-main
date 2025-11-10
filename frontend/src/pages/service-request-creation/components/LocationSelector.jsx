@@ -2,12 +2,31 @@ import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const LocationSelector = ({ currentLocation, onLocationChange }) => {
+const coordinatePresets = {
+  "Home - 123 MG Road, Bangalore, Karnataka 560001": { lat: 12.9823, lng: 77.6070 },
+  "Office - Tech Park, Electronic City, Bangalore 560100": { lat: 12.8396, lng: 77.6783 },
+};
+
+const LocationSelector = ({
+  currentLocation,
+  coordinates,
+  onLocationChange,
+  onCoordinatesChange,
+  onUseCurrentLocation,
+}) => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [tempLocation, setTempLocation] = useState(currentLocation);
 
+  React.useEffect(() => {
+    setTempLocation(currentLocation);
+  }, [currentLocation]);
+
   const handleLocationSave = () => {
     onLocationChange(tempLocation);
+    const preset = coordinatePresets[tempLocation];
+    if (preset && onCoordinatesChange) {
+      onCoordinatesChange(preset);
+    }
     setShowLocationModal(false);
   };
 
@@ -15,7 +34,7 @@ const LocationSelector = ({ currentLocation, onLocationChange }) => {
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-foreground">Service Location</h3>
       <div className="bg-card border border-border rounded-lg p-4">
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between mb-4 gap-3">
           <div className="flex items-start space-x-3">
             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
               <Icon name="MapPin" size={20} className="text-primary" />
@@ -23,17 +42,37 @@ const LocationSelector = ({ currentLocation, onLocationChange }) => {
             <div>
               <p className="font-medium text-foreground">Current Location</p>
               <p className="text-sm text-muted-foreground mt-1">{currentLocation}</p>
+              {coordinates ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Lat {coordinates.lat.toFixed(4)}, Lng {coordinates.lng.toFixed(4)}
+                </p>
+              ) : null}
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowLocationModal(true)}
-            iconName="Edit"
-            iconPosition="left"
-          >
-            Change
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (onUseCurrentLocation) {
+                  onUseCurrentLocation();
+                }
+              }}
+              iconName="Navigation"
+              iconPosition="left"
+            >
+              Use Current
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLocationModal(true)}
+              iconName="Edit"
+              iconPosition="left"
+            >
+              Change
+            </Button>
+          </div>
         </div>
 
         {/* Map Preview */}
@@ -44,7 +83,7 @@ const LocationSelector = ({ currentLocation, onLocationChange }) => {
             loading="lazy"
             title="Service Location"
             referrerPolicy="no-referrer-when-downgrade"
-            src="https://www.google.com/maps?q=12.9716,77.5946&z=15&output=embed"
+            src={`https://www.google.com/maps?q=${coordinates?.lat ?? 12.9716},${coordinates?.lng ?? 77.5946}&z=14&output=embed`}
             className="border-0"
           />
         </div>
@@ -89,7 +128,12 @@ const LocationSelector = ({ currentLocation, onLocationChange }) => {
                   ]?.map((address, index) => (
                     <button
                       key={index}
-                      onClick={() => setTempLocation(address)}
+                      onClick={() => {
+                        setTempLocation(address);
+                        if (coordinatePresets[address] && onCoordinatesChange) {
+                          onCoordinatesChange(coordinatePresets[address]);
+                        }
+                      }}
                       className="w-full text-left p-3 border border-border rounded-md hover:bg-muted trust-transition"
                     >
                       <div className="flex items-center space-x-2">

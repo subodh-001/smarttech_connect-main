@@ -4,7 +4,7 @@ import Icon from '../../../components/AppIcon';
 const ServiceCategorySelector = ({ selectedCategory, onCategorySelect, selectedSubcategory, onSubcategorySelect }) => {
   const serviceCategories = [
     {
-      id: 'plumber',
+      id: 'plumbing',
       name: 'Plumber',
       icon: 'Wrench',
       color: 'bg-blue-100 text-blue-700',
@@ -13,11 +13,11 @@ const ServiceCategorySelector = ({ selectedCategory, onCategorySelect, selectedS
         { id: 'tap-installation', name: 'Tap Installation' },
         { id: 'toilet-repair', name: 'Toilet Repair' },
         { id: 'water-heater', name: 'Water Heater Service' },
-        { id: 'drainage-cleaning', name: 'Drainage Cleaning' }
-      ]
+        { id: 'drainage-cleaning', name: 'Drainage Cleaning' },
+      ],
     },
     {
-      id: 'electrician',
+      id: 'electrical',
       name: 'Electrician',
       icon: 'Zap',
       color: 'bg-yellow-100 text-yellow-700',
@@ -26,11 +26,11 @@ const ServiceCategorySelector = ({ selectedCategory, onCategorySelect, selectedS
         { id: 'switch-installation', name: 'Switch Installation' },
         { id: 'fan-installation', name: 'Fan Installation' },
         { id: 'light-fitting', name: 'Light Fitting' },
-        { id: 'power-backup', name: 'Power Backup Setup' }
-      ]
+        { id: 'power-backup', name: 'Power Backup Setup' },
+      ],
     },
     {
-      id: 'ac-repair',
+      id: 'hvac',
       name: 'AC Repair',
       icon: 'Wind',
       color: 'bg-cyan-100 text-cyan-700',
@@ -39,25 +39,25 @@ const ServiceCategorySelector = ({ selectedCategory, onCategorySelect, selectedS
         { id: 'ac-installation', name: 'AC Installation' },
         { id: 'ac-gas-refill', name: 'Gas Refill' },
         { id: 'ac-repair', name: 'AC Repair' },
-        { id: 'ac-uninstallation', name: 'AC Uninstallation' }
-      ]
+        { id: 'ac-uninstallation', name: 'AC Uninstallation' },
+      ],
     },
     {
-      id: 'computer-repair',
-      name: 'Computer Repair',
+      id: 'appliance_repair',
+      name: 'Appliance Repair',
       icon: 'Monitor',
       color: 'bg-purple-100 text-purple-700',
       subcategories: [
         { id: 'laptop-repair', name: 'Laptop Repair' },
         { id: 'desktop-repair', name: 'Desktop Repair' },
         { id: 'data-recovery', name: 'Data Recovery' },
-        { id: 'virus-removal', name: 'Virus Removal' },
-        { id: 'software-installation', name: 'Software Installation' }
-      ]
+        { id: 'washing-machine', name: 'Washing Machine Repair' },
+        { id: 'fridge-service', name: 'Refrigerator Service' },
+      ],
     },
     {
-      id: 'carpenter',
-      name: 'Carpenter',
+      id: 'handyman',
+      name: 'Handyman',
       icon: 'Hammer',
       color: 'bg-orange-100 text-orange-700',
       subcategories: [
@@ -65,9 +65,35 @@ const ServiceCategorySelector = ({ selectedCategory, onCategorySelect, selectedS
         { id: 'door-installation', name: 'Door Installation' },
         { id: 'cabinet-making', name: 'Cabinet Making' },
         { id: 'wood-polishing', name: 'Wood Polishing' },
-        { id: 'custom-furniture', name: 'Custom Furniture' }
-      ]
-    }
+        { id: 'custom-furniture', name: 'Custom Furniture' },
+      ],
+    },
+    {
+      id: 'cleaning',
+      name: 'Cleaning',
+      icon: 'Sparkles',
+      color: 'bg-green-100 text-green-700',
+      subcategories: [
+        { id: 'home-deep-clean', name: 'Home Deep Cleaning' },
+        { id: 'kitchen-clean', name: 'Kitchen Cleaning' },
+        { id: 'bathroom-clean', name: 'Bathroom Cleaning' },
+        { id: 'sofa-clean', name: 'Sofa & Upholstery' },
+        { id: 'office-clean', name: 'Office Cleaning' },
+      ],
+    },
+    {
+      id: 'gardening',
+      name: 'Gardening',
+      icon: 'Leaf',
+      color: 'bg-emerald-100 text-emerald-700',
+      subcategories: [
+        { id: 'landscaping', name: 'Landscaping' },
+        { id: 'lawn-care', name: 'Lawn Care' },
+        { id: 'kitchen-garden', name: 'Kitchen Garden Setup' },
+        { id: 'plant-maintenance', name: 'Plant Maintenance' },
+        { id: 'balcony-garden', name: 'Balcony Garden' },
+      ],
+    },
   ];
 
   const selectedCategoryData = serviceCategories?.find(cat => cat?.id === selectedCategory);
@@ -80,7 +106,7 @@ const ServiceCategorySelector = ({ selectedCategory, onCategorySelect, selectedS
           {serviceCategories?.map((category) => (
             <button
               key={category?.id}
-              onClick={() => onCategorySelect(category?.id)}
+              onClick={() => onCategorySelect(category)}
               className={`p-4 rounded-lg border-2 trust-transition ${
                 selectedCategory === category?.id
                   ? 'border-primary bg-primary/5' :'border-border hover:border-primary/50 hover:bg-muted'

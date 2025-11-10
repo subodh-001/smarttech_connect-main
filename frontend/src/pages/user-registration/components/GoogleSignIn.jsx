@@ -1,32 +1,79 @@
 import React, { useState } from 'react';
+import { useGoogleLogin } from '@react-oauth/google';
 import Button from '../../../components/ui/Button';
-
 
 const GoogleSignIn = ({ onGoogleSignIn, isLoading }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [error, setError] = useState('');
+  const isGoogleConfigured = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
-  const handleGoogleSignIn = async () => {
+  const startGoogleLogin = useGoogleLogin({
+    flow: 'auth-code',
+    scope: 'openid email profile',
+    ux_mode: 'popup',
+    onSuccess: async (codeResponse) => {
+      try {
+        if (!codeResponse?.code) {
+          throw new Error('Google did not return an authorization code. Please try again.');
+        }
+        await onGoogleSignIn({
+          code: codeResponse.code,
+        });
+        setError('');
+      } catch (err) {
+        console.error('Google sign-in failed:', err);
+        setError(err?.message || 'We could not complete Google sign-in. Please try again.');
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    onError: (err) => {
+      console.error('Google login error:', err);
+      setError('Google sign-in was interrupted. Please try again.');
+      setIsGoogleLoading(false);
+    },
+  });
+
+  const handleMockGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     try {
-      // Mock Google Sign-in process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock user data from Google
-      const mockGoogleUser = {
-        fullName: "John Doe",
-        email: "john.doe@gmail.com",
-        phone: "",
-        userType: "seeker",
-        provider: "google",
-        providerId: "google_123456789",
-        avatar: "https://randomuser.me/api/portraits/men/32.jpg"
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const mockProfile = {
+        fullName: 'Google Demo User',
+        email: 'demo.google.user@example.com',
+        picture: 'https://www.gravatar.com/avatar/?d=identicon',
+        googleId: 'mock-google-demo-user'
       };
-      
-      onGoogleSignIn(mockGoogleUser);
-    } catch (error) {
-      console.error('Google sign-in failed:', error);
+      await onGoogleSignIn({
+        mockProfile
+      });
+      setError('');
+    } catch (err) {
+      console.error('Mock Google sign-in failed:', err);
+      setError('Unable to complete the simulated Google sign-in. Please try again.');
     } finally {
       setIsGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleClick = async () => {
+    if (isLoading) return;
+
+    setError('');
+
+    if (!isGoogleConfigured) {
+      await handleMockGoogleSignIn();
+      return;
+    }
+
+    setIsGoogleLoading(true);
+
+    try {
+      startGoogleLogin();
+    } catch (err) {
+      console.error('Failed to launch Google sign-in:', err);
+      setIsGoogleLoading(false);
+      setError('Unable to open Google sign-in. Check your internet connection and try again.');
     }
   };
 
@@ -46,7 +93,7 @@ const GoogleSignIn = ({ onGoogleSignIn, isLoading }) => {
         variant="outline"
         size="lg"
         fullWidth
-        onClick={handleGoogleSignIn}
+        onClick={handleGoogleClick}
         loading={isGoogleLoading}
         disabled={isLoading || isGoogleLoading}
         iconName="Chrome"
@@ -56,9 +103,19 @@ const GoogleSignIn = ({ onGoogleSignIn, isLoading }) => {
         Continue with Google
       </Button>
 
+      {(!isGoogleConfigured) && (
+        <p className="text-xs text-muted-foreground text-center">
+          Google OAuth isn’t configured yet, so we’ll simulate Google sign-in for local testing.
+        </p>
+      )}
+
+      {error && (
+        <p className="text-xs text-destructive text-center">{error}</p>
+      )}
+
       <div className="text-center">
         <p className="text-xs text-muted-foreground">
-          By signing up with Google, you agree to our Terms of Service and Privacy Policy
+          By signing up with Google, you confirm that you accept our Terms of Service and Privacy Policy.
         </p>
       </div>
     </div>

@@ -8,14 +8,17 @@ const RequestSummary = ({
   description, 
   budget, 
   schedule, 
-  photos 
+  photos,
+  descriptionMinLength = 30,
 }) => {
   const serviceCategories = {
-    'plumber': { name: 'Plumber', icon: 'Wrench' },
-    'electrician': { name: 'Electrician', icon: 'Zap' },
-    'ac-repair': { name: 'AC Repair', icon: 'Wind' },
-    'computer-repair': { name: 'Computer Repair', icon: 'Monitor' },
-    'carpenter': { name: 'Carpenter', icon: 'Hammer' }
+    plumbing: { name: 'Plumber', icon: 'Wrench' },
+    electrical: { name: 'Electrician', icon: 'Zap' },
+    hvac: { name: 'AC Repair', icon: 'Wind' },
+    appliance_repair: { name: 'Appliance Repair', icon: 'Monitor' },
+    handyman: { name: 'Handyman', icon: 'Hammer' },
+    cleaning: { name: 'Cleaning', icon: 'Sparkles' },
+    gardening: { name: 'Gardening', icon: 'Leaf' },
   };
 
   const subcategoryNames = {
@@ -37,16 +40,34 @@ const RequestSummary = ({
     'laptop-repair': 'Laptop Repair',
     'desktop-repair': 'Desktop Repair',
     'data-recovery': 'Data Recovery',
-    'virus-removal': 'Virus Removal',
-    'software-installation': 'Software Installation',
+    'washing-machine': 'Washing Machine Repair',
+    'fridge-service': 'Refrigerator Service',
     'furniture-repair': 'Furniture Repair',
     'door-installation': 'Door Installation',
     'cabinet-making': 'Cabinet Making',
     'wood-polishing': 'Wood Polishing',
-    'custom-furniture': 'Custom Furniture'
+    'custom-furniture': 'Custom Furniture',
+    'home-deep-clean': 'Home Deep Cleaning',
+    'kitchen-clean': 'Kitchen Cleaning',
+    'bathroom-clean': 'Bathroom Cleaning',
+    'sofa-clean': 'Sofa & Upholstery',
+    'office-clean': 'Office Cleaning',
+    'landscaping': 'Landscaping',
+    'lawn-care': 'Lawn Care',
+    'kitchen-garden': 'Kitchen Garden Setup',
+    'plant-maintenance': 'Plant Maintenance',
+    'balcony-garden': 'Balcony Garden',
   };
 
-  const isComplete = selectedCategory && selectedSubcategory && location && description && budget && schedule;
+  const trimmedDescription = description?.trim() || '';
+  const meetsDescriptionRequirement = trimmedDescription.length >= descriptionMinLength;
+  const isComplete =
+    selectedCategory &&
+    selectedSubcategory &&
+    location &&
+    meetsDescriptionRequirement &&
+    budget &&
+    schedule;
 
   return (
     <div className="bg-card border border-border rounded-lg p-6 space-y-6">
@@ -104,9 +125,13 @@ const RequestSummary = ({
               }
             </p>
           </div>
-          {description && (
-            <Icon name="CheckCircle" size={16} className="text-success" />
-          )}
+          {description ? (
+            meetsDescriptionRequirement ? (
+              <Icon name="CheckCircle" size={16} className="text-success" />
+            ) : (
+              <Icon name="AlertCircle" size={16} className="text-warning" />
+            )
+          ) : null}
         </div>
 
         {/* Budget */}
@@ -163,10 +188,11 @@ const RequestSummary = ({
         </div>
       </div>
       {/* Completion Status */}
-      <div className={`p-4 rounded-lg border ${
-        isComplete 
-          ? 'bg-success/5 border-success/20' :'bg-warning/5 border-warning/20'
-      }`}>
+      <div
+        className={`p-4 rounded-lg border ${
+          isComplete ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20'
+        }`}
+      >
         <div className="flex items-center space-x-2">
           <Icon 
             name={isComplete ? "CheckCircle" : "AlertCircle"} 
@@ -176,9 +202,11 @@ const RequestSummary = ({
           <span className={`text-sm font-medium ${
             isComplete ? "text-success" : "text-warning"
           }`}>
-            {isComplete 
-              ? "Ready to find technicians!" :"Please complete all required fields"
-            }
+            {isComplete
+              ? 'Ready to find technicians!'
+              : !meetsDescriptionRequirement && trimmedDescription.length > 0
+              ? `Add ${descriptionMinLength - trimmedDescription.length} more characters to your description`
+              : 'Please complete all required fields'}
           </span>
         </div>
       </div>

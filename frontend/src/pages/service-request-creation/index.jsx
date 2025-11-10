@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import Icon from '../../components/AppIcon';
@@ -10,95 +11,245 @@ import BudgetSelector from './components/BudgetSelector';
 import SchedulingOptions from './components/SchedulingOptions';
 import PhotoUpload from './components/PhotoUpload';
 import RequestSummary from './components/RequestSummary';
+import TechnicianMap from '../technician-selection/components/TechnicianMap';
+import { useAuth } from '../../contexts/MongoAuthContext';
+
+const DEFAULT_LOCATION_LABEL = '123 MG Road, Bangalore, Karnataka 560001';
+const DEFAULT_COORDINATES = { lat: 12.9716, lng: 77.5946 };
+const DEFAULT_RADIUS_KM = 12;
+
+const MIN_DESCRIPTION_LENGTH = 30;
 
 const ServiceRequestCreation = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+  const { user, isAuthenticated } = useAuth();
 
-  // Form state
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submissionError, setSubmissionError] = useState(null);
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [selectedCategoryInfo, setSelectedCategoryInfo] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
-  const [location, setLocation] = useState('123 MG Road, Bangalore, Karnataka 560001');
+  const [location, setLocation] = useState(DEFAULT_LOCATION_LABEL);
+  const [coordinates, setCoordinates] = useState(DEFAULT_COORDINATES);
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState(null);
   const [schedule, setSchedule] = useState(null);
   const [photos, setPhotos] = useState([]);
 
-  // Mock user data
-  const mockUser = {
-    name: "Rajesh Kumar",
-    email: "rajesh.kumar@email.com",
-    phone: "+91 9876543210"
-  };
+  const [availability, setAvailability] = useState({ loading: false, technicians: [], summary: null });
+  const [availabilityError, setAvailabilityError] = useState(null);
+  const [highlightedTechnician, setHighlightedTechnician] = useState(null);
 
-  const handleCategorySelect = (categoryId) => {
-    setSelectedCategory(categoryId);
-    setSelectedSubcategory(''); // Reset subcategory when category changes
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/user-login', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (!('geolocation' in navigator)) return;
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) return;
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setCoordinates(coords);
+        setLocation((prev) => (prev === DEFAULT_LOCATION_LABEL ? 'Current location' : prev));
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 6000 }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleCategorySelect = (category) => {
+    setSelectedCategoryId(category?.id || '');
+    setSelectedCategoryInfo(category || null);
+    setSelectedSubcategory('');
   };
 
   const handleSubcategorySelect = (subcategoryId) => {
     setSelectedSubcategory(subcategoryId);
   };
 
-  const handleLocationChange = (newLocation) => {
-    setLocation(newLocation);
+  const handleUseCurrentLocation = () => {
+    if (!('geolocation' in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setCoordinates(coords);
+        setLocation('Current location');
+      },
+      (error) => {
+        console.warn('Unable to fetch location', error);
+      },
+      { enableHighAccuracy: true, timeout: 6000 }
+    );
   };
 
-  const handleDescriptionChange = (newDescription) => {
-    setDescription(newDescription);
-  };
+  const fetchAvailability = useCallback(async () => {
+    if (!selectedCategoryId) {
+      setAvailability({ loading: false, technicians: [], summary: null });
+      return;
+    }
+    setAvailability((prev) => ({ ...prev, loading: true }));
+    setAvailabilityError(null);
+    try {
+      const params = {
+        category: selectedCategoryId,
+        radius: DEFAULT_RADIUS_KM,
+      };
+      if (Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lng)) {
+        params.lat = coordinates.lat;
+        params.lng = coordinates.lng;
+      }
+      const { data } = await axios.get('/api/technicians/available', { params });
+      setAvailability({
+        loading: false,
+        technicians: data?.technicians || [],
+        summary: data?.summary || null,
+      });
+    } catch (error) {
+      console.error('Failed to load available technicians:', error);
+      setAvailability({
+        loading: false,
+        technicians: [],
+        summary: null,
+      });
+      setAvailabilityError('Unable to load nearby technicians right now.');
+    }
+  }, [selectedCategoryId, coordinates.lat, coordinates.lng]);
 
-  const handleBudgetChange = (newBudget) => {
-    setBudget(newBudget);
-  };
+  useEffect(() => {
+    fetchAvailability();
+  }, [fetchAvailability]);
 
-  const handleScheduleChange = (newSchedule) => {
-    setSchedule(newSchedule);
-  };
+  const handleDescriptionChange = (newDescription) => setDescription(newDescription);
+  const handleBudgetChange = (newBudget) => setBudget(newBudget);
+  const handleScheduleChange = (newSchedule) => setSchedule(newSchedule);
+  const handlePhotosChange = (newPhotos) => setPhotos(newPhotos);
 
-  const handlePhotosChange = (newPhotos) => {
-    setPhotos(newPhotos);
-  };
+  const subcategoryInfo = useMemo(() => {
+    if (!selectedCategoryInfo || !selectedSubcategory) return null;
+    return selectedCategoryInfo.subcategories?.find((item) => item.id === selectedSubcategory) || null;
+  }, [selectedCategoryInfo, selectedSubcategory]);
 
   const isFormValid = () => {
-    return selectedCategory && 
-           selectedSubcategory && 
-           location && 
-           description?.trim()?.length >= 10 && 
-           budget && 
-           schedule;
+    const trimmedDescription = description?.trim() || '';
+    return (
+      selectedCategoryId &&
+      selectedSubcategory &&
+      location &&
+      trimmedDescription.length >= MIN_DESCRIPTION_LENGTH &&
+      budget &&
+      schedule
+    );
+  };
+
+  const determinePriority = (option) => {
+    if (!option) return 'medium';
+    if (option.id === 'now') return 'urgent';
+    if (option.id === 'within-2h') return 'high';
+    if (option.id === 'today') return 'medium';
+    return 'low';
+  };
+
+  const computeScheduledDate = (option) => {
+    if (!option) return undefined;
+    if (option.id === 'custom' && option.customDate && option.customTime) {
+      return new Date(`${option.customDate}T${option.customTime}:00`);
+    }
+    if (option.id === 'now') {
+      return new Date();
+    }
+    if (option.id === 'within-2h') {
+      return new Date(Date.now() + 2 * 60 * 60 * 1000);
+    }
+    if (option.id === 'today') {
+      const today = new Date();
+      today.setHours(18, 0, 0, 0);
+      return today;
+    }
+    return undefined;
+  };
+
+  const getSurgeMultiplier = (priorityKey) => {
+    if (priorityKey === 'urgent') return 1.2;
+    if (priorityKey === 'high') return 1.1;
+    return 1;
+  };
+
+  const buildRequestPayload = () => {
+    const scheduledDate = computeScheduledDate(schedule);
+    const priority = determinePriority(schedule);
+    const surgeMultiplier = getSurgeMultiplier(priority);
+    const adjustedBudgetMin =
+      budget?.min != null ? Math.round(budget.min * surgeMultiplier) : null;
+    const adjustedBudgetMax =
+      budget?.max != null ? Math.round(budget.max * surgeMultiplier) : null;
+    return {
+      category: selectedCategoryId,
+      title: `${selectedCategoryInfo?.name || 'Service'}${subcategoryInfo ? ` - ${subcategoryInfo.name}` : ''}`,
+      description,
+      priority,
+      scheduledDate: scheduledDate ? scheduledDate.toISOString() : undefined,
+      locationAddress: location,
+      locationCoordinates: coordinates,
+      budgetMin: adjustedBudgetMin,
+      budgetMax: adjustedBudgetMax,
+      requirements: {
+        subcategory: selectedSubcategory,
+        schedule,
+        budget: budget?.label,
+        photosCount: photos?.length || 0,
+        surgeMultiplier,
+        baseBudget: {
+          min: budget?.min ?? null,
+          max: budget?.max ?? null,
+        },
+      },
+      radiusInKm: DEFAULT_RADIUS_KM,
+    };
   };
 
   const handleFindTechnicians = async () => {
+    setSubmissionError(null);
     if (!isFormValid()) {
-      alert('Please complete all required fields before proceeding.');
+      const trimmedDescription = description?.trim() || '';
+      if (trimmedDescription.length < MIN_DESCRIPTION_LENGTH) {
+        setSubmissionError(
+          `Please add a bit more detail to the description (minimum ${MIN_DESCRIPTION_LENGTH} characters).`
+        );
+      } else {
+        setSubmissionError('Please complete all required fields before proceeding.');
+      }
       return;
     }
-
     setLoading(true);
-
-    // Simulate API call
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Navigate to technician selection with request data
+      const payload = buildRequestPayload();
+      const { data } = await axios.post('/api/service-requests', payload);
       navigate('/technician-selection', {
         state: {
-          requestData: {
-            category: selectedCategory,
-            subcategory: selectedSubcategory,
-            location,
-            description,
-            budget,
-            schedule,
-            photos: photos?.length,
-            timestamp: new Date()?.toISOString()
-          }
-        }
+          serviceRequest: data?.request,
+          technicians: data?.matchingTechnicians,
+          matchingSummary: data?.matchingSummary,
+        },
       });
     } catch (error) {
-      console.error('Error creating service request:', error);
-      alert('Failed to create service request. Please try again.');
+      console.error('Failed to create service request:', error);
+      setSubmissionError(
+        error?.response?.data?.error || 'Failed to create service request. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -106,34 +257,50 @@ const ServiceRequestCreation = () => {
 
   const handleSaveDraft = () => {
     const draftData = {
-      selectedCategory,
+      selectedCategory: selectedCategoryId,
       selectedSubcategory,
       location,
+      coordinates,
       description,
       budget,
       schedule,
       photos: photos?.length,
-      savedAt: new Date()?.toISOString()
+      savedAt: new Date().toISOString(),
     };
-    
     localStorage.setItem('serviceRequestDraft', JSON.stringify(draftData));
-    alert('Draft saved successfully!');
+    setSubmissionError('Draft saved locally.');
   };
+
+  const mapUserLocation = useMemo(
+    () => ({
+      lat: coordinates.lat,
+      lng: coordinates.lng,
+      address: location,
+    }),
+    [coordinates, location]
+  );
+
+  const availabilitySummaryText = useMemo(() => {
+    if (availability.loading) return 'Checking live availability...';
+    if (!availability.summary) return 'No technicians found nearby yet.';
+    const nearby = availability.summary.withinRadius ?? availability.summary.total ?? 0;
+    const total = availability.summary.total ?? nearby;
+    if (total === 0) return 'No technicians are online right now.';
+    if (nearby === total) {
+      return `${nearby} technician${nearby > 1 ? 's are' : ' is'} available near you.`;
+    }
+    return `${nearby} nearby • ${total} citywide technicians online.`;
+  }, [availability]);
 
   return (
     <div className="min-h-screen bg-background">
-      <Header 
-        user={mockUser} 
-        location="Bangalore, Karnataka"
-        activeService={null}
-      />
-      
+      <Header user={user} location={location} activeService={null} />
+
       <main className="pt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header Section */}
           <div className="mb-8">
             <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-2">
-              <button 
+              <button
                 onClick={() => navigate('/user-dashboard')}
                 className="hover:text-foreground trust-transition"
               >
@@ -144,81 +311,118 @@ const ServiceRequestCreation = () => {
             </div>
             <h1 className="text-3xl font-bold text-foreground">Request a Service</h1>
             <p className="text-muted-foreground mt-2">
-              Tell us what you need help with and we'll connect you with verified technicians in your area.
+              Tell us what you need help with and we&apos;ll connect you with verified technicians in your area.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Form */}
             <div className="lg:col-span-2 space-y-8">
-              {/* Service Category Selection */}
               <div className="bg-card border border-border rounded-lg p-6">
                 <ServiceCategorySelector
-                  selectedCategory={selectedCategory}
+                  selectedCategory={selectedCategoryId}
                   onCategorySelect={handleCategorySelect}
                   selectedSubcategory={selectedSubcategory}
                   onSubcategorySelect={handleSubcategorySelect}
                 />
               </div>
 
-              {/* Location Selection */}
               <div className="bg-card border border-border rounded-lg p-6">
                 <LocationSelector
                   currentLocation={location}
-                  onLocationChange={handleLocationChange}
+                  coordinates={coordinates}
+                  onLocationChange={setLocation}
+                  onCoordinatesChange={setCoordinates}
+                  onUseCurrentLocation={handleUseCurrentLocation}
                 />
               </div>
 
-              {/* Service Description */}
               <div className="bg-card border border-border rounded-lg p-6">
                 <ServiceDescription
                   description={description}
                   onDescriptionChange={handleDescriptionChange}
+                  minLength={MIN_DESCRIPTION_LENGTH}
                 />
               </div>
 
-              {/* Budget Selection */}
               <div className="bg-card border border-border rounded-lg p-6">
                 <BudgetSelector
                   budget={budget}
                   onBudgetChange={handleBudgetChange}
-                  selectedCategory={selectedCategory}
+                  selectedCategory={selectedCategoryId}
                   selectedSubcategory={selectedSubcategory}
                 />
               </div>
 
-              {/* Scheduling Options */}
               <div className="bg-card border border-border rounded-lg p-6">
-                <SchedulingOptions
-                  schedule={schedule}
-                  onScheduleChange={handleScheduleChange}
-                />
+                <SchedulingOptions schedule={schedule} onScheduleChange={handleScheduleChange} />
               </div>
 
-              {/* Photo Upload */}
               <div className="bg-card border border-border rounded-lg p-6">
-                <PhotoUpload
-                  photos={photos}
-                  onPhotosChange={handlePhotosChange}
-                />
+                <PhotoUpload photos={photos} onPhotosChange={handlePhotosChange} />
               </div>
             </div>
 
-            {/* Sidebar - Request Summary */}
             <div className="lg:col-span-1">
-              <div className="sticky top-24">
+              <div className="sticky top-24 space-y-6">
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Live Technician Availability</p>
+                      <p className="text-xs text-muted-foreground mt-1">{availabilitySummaryText}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={fetchAvailability}
+                      disabled={!selectedCategoryId || availability.loading}
+                      title="Refresh availability"
+                    >
+                      <Icon name="RefreshCcw" size={16} />
+                    </Button>
+                  </div>
+                  {availabilityError ? (
+                    <p className="text-xs text-warning mt-3">{availabilityError}</p>
+                  ) : null}
+                  {availability.loading ? (
+                    <div className="h-56 flex items-center justify-center">
+                      <div className="text-center text-xs text-muted-foreground">
+                        <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                        Checking technicians online...
+                      </div>
+                    </div>
+                  ) : availability.technicians?.length ? (
+                    <div className="h-56 mt-4">
+                      <TechnicianMap
+                        technicians={availability.technicians.slice(0, 6)}
+                        selectedTechnician={highlightedTechnician}
+                        onTechnicianSelect={setHighlightedTechnician}
+                        userLocation={mapUserLocation}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-40 flex items-center justify-center text-xs text-muted-foreground mt-4">
+                      No technicians are currently visible near this location.
+                    </div>
+                  )}
+                </div>
+
                 <RequestSummary
-                  selectedCategory={selectedCategory}
+                  selectedCategory={selectedCategoryId}
                   selectedSubcategory={selectedSubcategory}
                   location={location}
                   description={description}
                   budget={budget}
                   schedule={schedule}
                   photos={photos}
+                  descriptionMinLength={MIN_DESCRIPTION_LENGTH}
                 />
 
-                {/* Action Buttons */}
-                <div className="mt-6 space-y-3">
+                <div className="space-y-3">
+                  {submissionError ? (
+                    <div className="text-xs text-warning bg-warning/10 border border-warning/20 rounded-md px-3 py-2">
+                      {submissionError}
+                    </div>
+                  ) : null}
                   <Button
                     onClick={handleFindTechnicians}
                     disabled={!isFormValid() || loading}
@@ -242,8 +446,7 @@ const ServiceRequestCreation = () => {
                   </Button>
                 </div>
 
-                {/* Help Section */}
-                <div className="mt-6 bg-muted/50 border border-border rounded-lg p-4">
+                <div className="bg-muted/50 border border-border rounded-lg p-4">
                   <div className="flex items-center space-x-2 mb-2">
                     <Icon name="HelpCircle" size={16} className="text-primary" />
                     <span className="text-sm font-medium text-foreground">Need Help?</span>

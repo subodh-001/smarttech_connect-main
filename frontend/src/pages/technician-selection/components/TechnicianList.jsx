@@ -2,16 +2,20 @@ import React from 'react';
 import TechnicianCard from './TechnicianCard';
 import Icon from '../../../components/AppIcon';
 
-const TechnicianList = ({ 
-  technicians, 
-  loading, 
-  onViewProfile, 
-  onSendMessage, 
-  onBookNow, 
+const TechnicianList = ({
+  technicians,
+  loading,
+  onViewProfile,
+  onSendMessage,
+  onBookNow,
   onCompare,
-  selectedForComparison 
+  selectedForComparison,
+  bookingState = {},
 }) => {
-  if (loading) {
+  const hasResults = Array.isArray(technicians) && technicians.length > 0;
+  const showInitialSkeleton = loading && !hasResults;
+
+  if (showInitialSkeleton) {
     return (
       <div className="space-y-4">
         {[...Array(3)]?.map((_, index) => (
@@ -37,7 +41,7 @@ const TechnicianList = ({
     );
   }
 
-  if (technicians?.length === 0) {
+  if (!loading && !hasResults) {
     return (
       <div className="text-center py-12">
         <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
@@ -60,18 +64,31 @@ const TechnicianList = ({
   }
 
   return (
-    <div className="space-y-4">
-      {technicians?.map((technician) => (
-        <TechnicianCard
-          key={technician?.id}
-          technician={technician}
-          onViewProfile={onViewProfile}
-          onSendMessage={onSendMessage}
-          onBookNow={onBookNow}
-          onCompare={onCompare}
-          isSelected={selectedForComparison?.some(selected => selected?.id === technician?.id)}
-        />
-      ))}
+    <div className="relative space-y-4">
+      {loading && hasResults ? (
+        <div className="absolute inset-0 bg-background/70 backdrop-blur-[1px] flex items-center justify-center z-10">
+          <div className="flex items-center space-x-2 text-xs text-muted-foreground bg-card px-3 py-2 rounded-md border border-border">
+            <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span>Refreshing technicians…</span>
+          </div>
+        </div>
+      ) : null}
+      {technicians?.map((technician) => {
+        const isSelected = selectedForComparison?.some((selected) => selected?.id === technician?.id);
+        const isSubmitting = bookingState?.submitting && bookingState?.technicianId === technician?.id;
+        return (
+          <TechnicianCard
+            key={technician?.id}
+            technician={technician}
+            onViewProfile={onViewProfile}
+            onSendMessage={onSendMessage}
+            onBookNow={onBookNow}
+            onCompare={onCompare}
+            isSelected={isSelected}
+            isBooking={isSubmitting}
+          />
+        );
+      })}
     </div>
   );
 };

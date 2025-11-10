@@ -4,6 +4,8 @@ import path from 'path';
 import multer from 'multer';
 import Technician from '../models/Technician.js';
 import authMiddleware from '../middleware/auth.js';
+import { findAvailableTechnicians } from '../services/technicianMatching.js';
+import { TECHNICIAN_SPECIALTIES, SPECIALTY_LABEL_MAP } from '../constants/technicianSpecialties.js';
 
 const router = express.Router();
 
@@ -46,6 +48,146 @@ router.get('/', authMiddleware, async (req, res) => {
   const q = userId ? { userId } : {};
   const list = await Technician.find(q).limit(50).lean();
   res.json(list);
+});
+
+router.get('/available', authMiddleware, async (req, res) => {
+  try {
+    const { category, radius, limit } = req.query;
+    const lat = Number.parseFloat(req.query.lat);
+    const lng = Number.parseFloat(req.query.lng);
+
+    const filters = {
+      category: category || undefined,
+      lat: Number.isFinite(lat) ? lat : undefined,
+      lng: Number.isFinite(lng) ? lng : undefined,
+      radiusInKm: radius ? Number.parseFloat(radius) || undefined : undefined,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+    };
+
+    const result = await findAvailableTechnicians(filters);
+    res.json(result);
+  } catch (error) {
+    console.error('Failed to fetch available technicians:', error);
+    res.status(500).json({ error: 'Failed to fetch available technicians' });
+  }
+});
+
+router.get('/specialties', authMiddleware, (_req, res) => {
+  res.json({
+    specialties: TECHNICIAN_SPECIALTIES,
+  });
+});
+
+router.get('/me/profile', authMiddleware, async (req, res) => {
+  if (!ensureTechnicianRole(req, res)) return;
+
+  try {
+    let technician = await Technician.findOne({ userId: req.user.sub }).lean();
+    if (!technician) {
+      technician = await Technician.create({ userId: req.user.sub });
+      technician = technician.toObject();
+    }
+
+    res.json({
+      technician: {
+        specialties: technician.specialties || [],
+        yearsOfExperience: technician.yearsOfExperience || 0,
+        serviceRadius: technician.serviceRadius || 10,
+        hourlyRate: technician.hourlyRate || 0,
+        bio: technician.bio || '',
+        certifications: technician.certifications || [],
+      },
+      specialties: TECHNICIAN_SPECIALTIES,
+    });
+  } catch (error) {
+    console.error('Failed to load technician profile:', error);
+    res.status(500).json({ error: 'Failed to load technician profile.' });
+  }
+});
+
+router.put('/me/profile', authMiddleware, async (req, res) => {
+  if (!ensureTechnicianRole(req, res)) return;
+
+  try {
+    const payload = req.body || {};
+    const allowedSpecialties = new Set(TECHNICIAN_SPECIALTIES.map((item) => item.id));
+
+    const updates = {};
+
+    if (payload.specialties !== undefined) {
+      if (!Array.isArray(payload.specialties)) {
+        return res.status(400).json({ error: 'Specialties must be an array.' });
+      }
+      const cleaned = [...new Set(payload.specialties.filter((spec) => allowedSpecialties.has(spec)))];
+      if (cleaned.length === 0) {
+        return res.status(400).json({ error: 'Select at least one valid specialty.' });
+      }
+      updates.specialties = cleaned;
+    }
+
+    if (payload.yearsOfExperience !== undefined) {
+      const years = Number(payload.yearsOfExperience);
+      if (!Number.isInteger(years) || years < 0 || years > 60) {
+        return res.status(400).json({ error: 'Years of experience must be between 0 and 60.' });
+      }
+      updates.yearsOfExperience = years;
+    }
+
+    if (payload.serviceRadius !== undefined) {
+      const radius = Number(payload.serviceRadius);
+      if (Number.isNaN(radius) || radius < 1 || radius > 50) {
+        return res.status(400).json({ error: 'Service radius must be between 1 and 50 km.' });
+      }
+      updates.serviceRadius = radius;
+    }
+
+    if (payload.hourlyRate !== undefined) {
+      const rate = Number(payload.hourlyRate);
+      if (Number.isNaN(rate) || rate < 0 || rate > 10000) {
+        return res.status(400).json({ error: 'Hourly rate must be between 0 and 10000.' });
+      }
+      updates.hourlyRate = rate;
+    }
+
+    if (payload.bio !== undefined) {
+      updates.bio = typeof payload.bio === 'string' ? payload.bio.trim().slice(0, 600) : '';
+    }
+
+    if (payload.certifications !== undefined) {
+      if (!Array.isArray(payload.certifications)) {
+        return res.status(400).json({ error: 'Certifications must be an array of strings.' });
+      }
+      updates.certifications = payload.certifications
+        .map((item) => (typeof item === 'string' ? item.trim() : null))
+        .filter(Boolean)
+        .slice(0, 10);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided for update.' });
+    }
+
+    const technician = await Technician.findOneAndUpdate(
+      { userId: req.user.sub },
+      { $set: updates },
+      { new: true, upsert: true }
+    ).lean();
+
+    res.json({
+      technician: {
+        specialties: technician.specialties || [],
+        yearsOfExperience: technician.yearsOfExperience || 0,
+        serviceRadius: technician.serviceRadius || 10,
+        hourlyRate: technician.hourlyRate || 0,
+        bio: technician.bio || '',
+        certifications: technician.certifications || [],
+      },
+      specialties: TECHNICIAN_SPECIALTIES,
+    });
+  } catch (error) {
+    console.error('Failed to update technician profile:', error);
+    res.status(500).json({ error: 'Failed to update technician profile.' });
+  }
 });
 
 router.get('/me/kyc', authMiddleware, async (req, res) => {

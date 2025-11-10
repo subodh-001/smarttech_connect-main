@@ -4,17 +4,18 @@ import Icon from "./AppIcon";
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, message: '', stack: '' };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true };
+    return { hasError: true, message: error?.message || 'Unknown error', stack: error?.stack || '' };
   }
 
   componentDidCatch(error, errorInfo) {
     error.__ErrorBoundary = true;
     window.__COMPONENT_ERROR__?.(error, errorInfo);
-    // console.log("Error caught by ErrorBoundary:", error, errorInfo);
+    // eslint-disable-next-line no-console
+    console.error('ErrorBoundary captured an error:', error, errorInfo);
   }
 
   render() {
@@ -22,6 +23,11 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="min-h-screen flex items-center justify-center bg-neutral-50">
           <div className="text-center p-8 max-w-md">
+            {this.state.message ? (
+              <div className="mb-4 text-xs text-neutral-500 break-words">
+                {this.state.message}
+              </div>
+            ) : null}
             <div className="flex justify-center items-center mb-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="42px" height="42px" viewBox="0 0 32 33" fill="none">
                 <path d="M16 28.5C22.6274 28.5 28 23.1274 28 16.5C28 9.87258 22.6274 4.5 16 4.5C9.37258 4.5 4 9.87258 4 16.5C4 23.1274 9.37258 28.5 16 28.5Z" stroke="#343330" strokeWidth="2" strokeMiterlimit="10" />
@@ -34,6 +40,12 @@ class ErrorBoundary extends React.Component {
               <h1 className="text-2xl font-medium text-neutral-800">Something went wrong</h1>
               <p className="text-neutral-600 text-base w w-8/12 mx-auto">We encountered an unexpected error while processing your request.</p>
             </div>
+            {this.state.stack ? (
+              <details className="mt-4 text-left text-xs text-neutral-500 whitespace-pre-wrap">
+                <summary className="cursor-pointer text-neutral-600 mb-1">Details</summary>
+                {this.state.stack}
+              </details>
+            ) : null}
             <div className="flex justify-center items-center mt-6">
               <button
                 onClick={() => {
