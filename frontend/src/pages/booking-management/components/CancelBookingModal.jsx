@@ -8,6 +8,7 @@ const CancelBookingModal = ({ booking, isOpen, onClose, onConfirm }) => {
   const [customReason, setCustomReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [agreedToPolicy, setAgreedToPolicy] = useState(false);
+  const [error, setError] = useState(null);
 
   if (!isOpen || !booking) return null;
 
@@ -23,44 +24,54 @@ const CancelBookingModal = ({ booking, isOpen, onClose, onConfirm }) => {
 
   const handleConfirm = async () => {
     if (!selectedReason || !agreedToPolicy) return;
-    
+
     setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      onConfirm({
+    setError(null);
+
+    try {
+      await onConfirm?.({
         bookingId: booking?.id,
-        reason: selectedReason === 'Other' ? customReason : selectedReason
+        reason: selectedReason === 'Other' ? customReason : selectedReason,
       });
+      handleClose();
+    } catch (err) {
+      setError(err?.message || 'Failed to cancel booking. Please try again.');
+    } finally {
       setIsLoading(false);
-      onClose();
-      // Reset form
-      setSelectedReason('');
-      setCustomReason('');
-      setAgreedToPolicy(false);
-    }, 1500);
+    }
   };
 
   const handleClose = () => {
     setSelectedReason('');
     setCustomReason('');
     setAgreedToPolicy(false);
-    onClose();
+    setError(null);
+    onClose?.();
   };
 
   // Calculate refund amount based on cancellation timing
   const getRefundInfo = () => {
     const now = new Date();
-    const scheduledDateTime = new Date(`${booking.scheduledDate}T${booking.scheduledTime}`);
-    const hoursUntilService = (scheduledDateTime - now) / (1000 * 60 * 60);
-    
-    if (hoursUntilService > 24) {
-      return { amount: booking?.price, percentage: 100 };
-    } else if (hoursUntilService > 2) {
-      return { amount: (booking?.price * 0.8)?.toFixed(2), percentage: 80 };
-    } else {
-      return { amount: 0, percentage: 0 };
+    const scheduledDateTime =
+      booking?.scheduledDate && booking?.scheduledTime
+        ? new Date(`${booking.scheduledDate}T${booking.scheduledTime}`)
+        : null;
+
+    if (!scheduledDateTime || Number.isNaN(scheduledDateTime.getTime())) {
+      return { amount: booking?.price || 0, percentage: 0 };
     }
+
+    const hoursUntilService = (scheduledDateTime - now) / (1000 * 60 * 60);
+
+    if (hoursUntilService > 24) {
+      return { amount: booking?.price || 0, percentage: 100 };
+    }
+
+    if (hoursUntilService > 2) {
+      return { amount: (booking?.price || 0) * 0.8, percentage: 80 };
+    }
+
+    return { amount: 0, percentage: 0 };
   };
 
   const refundInfo = getRefundInfo();
@@ -99,7 +110,9 @@ const CancelBookingModal = ({ booking, isOpen, onClose, onConfirm }) => {
               </div>
               <div className="flex items-center gap-2">
                 <Icon name="DollarSign" size={16} className="text-text-secondary" />
-                <span className="text-text-primary">${booking?.price}</span>
+                <span className="text-text-primary">
+                  ₹{Number(booking?.price || 0).toLocaleString('en-IN')}
+                </span>
               </div>
             </div>
           </div>
@@ -118,7 +131,11 @@ const CancelBookingModal = ({ booking, isOpen, onClose, onConfirm }) => {
               <div className="text-sm">
                 <p className="font-medium text-text-primary mb-1">Refund Information</p>
                 <p className="text-text-secondary">
-                  You will receive <span className="font-medium">${refundInfo?.amount}</span> ({refundInfo?.percentage}% refund)
+                  You will receive{' '}
+                  <span className="font-medium">
+                    ₹{Number(refundInfo?.amount || 0).toLocaleString('en-IN')}
+                  </span>{' '}
+                  ({refundInfo?.percentage}% refund)
                 </p>
                 <p className="text-xs text-text-secondary mt-1">
                   Refund will be processed within 3-5 business days
@@ -126,6 +143,12 @@ const CancelBookingModal = ({ booking, isOpen, onClose, onConfirm }) => {
               </div>
             </div>
           </div>
+
+          {error ? (
+            <div className="rounded-md border border-error/20 bg-error/10 px-3 py-2 text-sm text-error">
+              {error}
+            </div>
+          ) : null}
 
           {/* Cancellation Reason */}
           <div>

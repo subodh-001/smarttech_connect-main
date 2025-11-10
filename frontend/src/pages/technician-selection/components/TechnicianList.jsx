@@ -2,12 +2,12 @@ import React from 'react';
 import TechnicianCard from './TechnicianCard';
 import Icon from '../../../components/AppIcon';
 
-const TechnicianList = ({
-  technicians,
-  loading,
-  onViewProfile,
-  onSendMessage,
-  onBookNow,
+const TechnicianList = ({ 
+  technicians, 
+  loading, 
+  onViewProfile, 
+  onSendMessage, 
+  onBookNow, 
   onCompare,
   selectedForComparison,
   bookingState = {},
@@ -77,16 +77,16 @@ const TechnicianList = ({
         const isSelected = selectedForComparison?.some((selected) => selected?.id === technician?.id);
         const isSubmitting = bookingState?.submitting && bookingState?.technicianId === technician?.id;
         return (
-          <TechnicianCard
-            key={technician?.id}
-            technician={technician}
-            onViewProfile={onViewProfile}
-            onSendMessage={onSendMessage}
-            onBookNow={onBookNow}
-            onCompare={onCompare}
+        <TechnicianCard
+          key={technician?.id}
+          technician={technician}
+          onViewProfile={onViewProfile}
+          onSendMessage={onSendMessage}
+          onBookNow={onBookNow}
+          onCompare={onCompare}
             isSelected={isSelected}
             isBooking={isSubmitting}
-          />
+        />
         );
       })}
     </div>

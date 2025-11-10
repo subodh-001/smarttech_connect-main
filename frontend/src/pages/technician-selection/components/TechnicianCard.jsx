@@ -3,7 +3,15 @@ import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
 
-const TechnicianCard = ({ technician, onViewProfile, onSendMessage, onBookNow, onCompare, isSelected }) => {
+const TechnicianCard = ({
+  technician,
+  onViewProfile,
+  onSendMessage,
+  onBookNow,
+  onCompare,
+  isSelected,
+  isBooking = false,
+}) => {
   const [showCounterOffer, setShowCounterOffer] = useState(false);
   const [counterOfferAmount, setCounterOfferAmount] = useState('');
 

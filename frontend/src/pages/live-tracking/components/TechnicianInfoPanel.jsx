@@ -21,16 +21,28 @@ const TechnicianInfoPanel = ({
         return 'bg-orange-100 text-orange-800';
       case 'Completed':
         return 'bg-success text-success-foreground';
+      case 'Cancelled':
+        return 'bg-error/10 text-error';
+      case 'Awaiting':
+        return 'bg-muted text-muted-foreground';
       default:
         return 'bg-muted text-muted-foreground';
     }
   };
 
   const formatETA = (eta) => {
-    if (!eta) return 'Calculating...';
+    if (eta == null) return '—';
+    if (eta <= 0) return 'Arriving now';
     const minutes = Math.ceil(eta / 60);
     return `${minutes} min${minutes !== 1 ? 's' : ''}`;
   };
+
+  const ratingValue =
+    technician?.rating != null && !Number.isNaN(Number(technician.rating))
+      ? Number(technician.rating)
+      : null;
+  const reviewCount =
+    technician?.reviewCount != null ? Number(technician.reviewCount) : null;
 
   return (
     <div className="bg-card border border-border rounded-lg trust-shadow-md p-4 space-y-4">
@@ -39,28 +51,43 @@ const TechnicianInfoPanel = ({
         <div className="relative">
           <Image
             src={technician?.avatar}
-            alt={technician?.name}
+            alt={technician?.name || 'Technician'}
             className="w-12 h-12 rounded-full object-cover"
           />
-          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+          <div
+            className={`absolute -bottom-1 -right-1 w-4 h-4 border-2 border-white rounded-full ${
+              technician?.isOnline ? 'bg-green-500' : 'bg-muted'
+            }`}
+          ></div>
         </div>
         <div className="flex-1">
-          <h3 className="font-semibold text-foreground">{technician?.name}</h3>
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center">
-              {[...Array(5)]?.map((_, i) => (
-                <Icon
-                  key={i}
-                  name="Star"
-                  size={12}
-                  className={i < Math.floor(technician?.rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}
-                />
-              ))}
+          <h3 className="font-semibold text-foreground">
+            {technician?.name || 'Awaiting assignment'}
+          </h3>
+          {ratingValue != null ? (
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center">
+                {[...Array(5)].map((_, i) => (
+                  <Icon
+                    key={i}
+                    name="Star"
+                    size={12}
+                    className={
+                      i < Math.round(ratingValue)
+                        ? 'text-yellow-400 fill-current'
+                        : 'text-gray-300'
+                    }
+                  />
+                ))}
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {ratingValue.toFixed(1)}
+                {reviewCount != null ? ` (${reviewCount} reviews)` : ''}
+              </span>
             </div>
-            <span className="text-sm text-muted-foreground">
-              {technician?.rating} ({technician?.reviewCount} reviews)
-            </span>
-          </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">No ratings yet</span>
+          )}
         </div>
         <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(currentStatus)}`}>
           {currentStatus}
@@ -73,20 +100,27 @@ const TechnicianInfoPanel = ({
           <div className="text-sm text-muted-foreground">ETA</div>
         </div>
         <div className="text-center p-3 bg-muted rounded-lg">
-          <div className="text-2xl font-bold text-primary">{technician?.distance}</div>
-          <div className="text-sm text-muted-foreground">Away</div>
+          <div className="text-2xl font-bold text-primary">
+            {technician?.distance || '—'}
+          </div>
+          <div className="text-sm text-muted-foreground">Distance</div>
         </div>
       </div>
       {/* Contact Information */}
       <div className="space-y-2">
         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
           <Icon name="Phone" size={16} />
-          <span>{technician?.phone}</span>
+          <span>{technician?.phone || 'Not available'}</span>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-          <Icon name="Car" size={16} />
-          <span>{technician?.vehicle} - {technician?.vehicleNumber}</span>
-        </div>
+        {technician?.vehicle || technician?.vehicleNumber ? (
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Icon name="Car" size={16} />
+            <span>
+              {technician?.vehicle || 'Vehicle'}{' '}
+              {technician?.vehicleNumber ? `- ${technician.vehicleNumber}` : ''}
+            </span>
+          </div>
+        ) : null}
       </div>
       {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-2">
@@ -97,6 +131,7 @@ const TechnicianInfoPanel = ({
           iconPosition="left"
           onClick={onCall}
           className="w-full"
+          disabled={!technician?.phone}
         >
           Call
         </Button>

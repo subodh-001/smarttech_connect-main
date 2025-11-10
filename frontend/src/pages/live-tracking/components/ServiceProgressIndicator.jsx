@@ -34,6 +34,12 @@ const ServiceProgressIndicator = ({ currentPhase, phases, lastUpdate }) => {
     });
   };
 
+  const phaseList = Array.isArray(phases) ? phases : [];
+  const completedCount = phaseList.filter((phase) => phase?.completedAt).length;
+  const progressPercent = phaseList.length
+    ? Math.round((completedCount / phaseList.length) * 100)
+    : 0;
+
   return (
     <div className="bg-card border border-border rounded-lg trust-shadow p-4">
       <div className="flex items-center justify-between mb-4">
@@ -45,7 +51,7 @@ const ServiceProgressIndicator = ({ currentPhase, phases, lastUpdate }) => {
         )}
       </div>
       <div className="space-y-3">
-        {phases?.map((phase, index) => {
+        {phaseList.map((phase, index) => {
           const isActive = phase?.name === currentPhase;
           const isCompleted = phase?.completedAt !== null;
           const isPending = !isCompleted && !isActive;
@@ -107,14 +113,12 @@ const ServiceProgressIndicator = ({ currentPhase, phases, lastUpdate }) => {
       <div className="mt-4">
         <div className="flex justify-between text-sm text-muted-foreground mb-2">
           <span>Progress</span>
-          <span>{Math.round((phases?.filter(p => p?.completedAt)?.length / phases?.length) * 100)}%</span>
+          <span>{progressPercent}%</span>
         </div>
         <div className="w-full bg-muted rounded-full h-2">
           <div 
             className="bg-primary h-2 rounded-full trust-transition"
-            style={{ 
-              width: `${(phases?.filter(p => p?.completedAt)?.length / phases?.length) * 100}%` 
-            }}
+            style={{ width: `${progressPercent}%` }}
           ></div>
         </div>
       </div>

@@ -146,11 +146,11 @@ const ServiceRequestCreation = () => {
   const isFormValid = () => {
     const trimmedDescription = description?.trim() || '';
     return (
-      selectedCategoryId &&
-      selectedSubcategory &&
-      location &&
+    selectedCategoryId &&
+    selectedSubcategory &&
+    location &&
       trimmedDescription.length >= MIN_DESCRIPTION_LENGTH &&
-      budget &&
+    budget &&
       schedule
     );
   };
@@ -230,7 +230,7 @@ const ServiceRequestCreation = () => {
           `Please add a bit more detail to the description (minimum ${MIN_DESCRIPTION_LENGTH} characters).`
         );
       } else {
-        setSubmissionError('Please complete all required fields before proceeding.');
+      setSubmissionError('Please complete all required fields before proceeding.');
       }
       return;
     }

@@ -43,58 +43,58 @@ const responseThresholdMap = {
 const filterTechnicians = (source = [], filters = defaultFilters) => {
   let result = [...source];
 
-  if (filters.availability !== 'all') {
-    result = result.filter((tech) => tech.availability === filters.availability);
-  }
+      if (filters.availability !== 'all') {
+        result = result.filter((tech) => tech.availability === filters.availability);
+      }
 
-  if (filters.rating !== 'all') {
-    const minRating = parseFloat(filters.rating);
-    result = result.filter((tech) => (tech.ratingValue ?? parseFloat(tech.rating)) >= minRating);
-  }
+      if (filters.rating !== 'all') {
+        const minRating = parseFloat(filters.rating);
+        result = result.filter((tech) => (tech.ratingValue ?? parseFloat(tech.rating)) >= minRating);
+      }
 
-  if (filters.priceRange !== 'all') {
-    if (filters.priceRange.endsWith('+')) {
-      const min = parseInt(filters.priceRange, 10);
+      if (filters.priceRange !== 'all') {
+        if (filters.priceRange.endsWith('+')) {
+          const min = parseInt(filters.priceRange, 10);
       result = result.filter((tech) => {
         const rate = tech.priceWithSurge ?? tech.hourlyRate ?? 0;
         return rate >= min;
       });
-    } else {
-      const [minRaw, maxRaw] = filters.priceRange.split('-');
-      const min = parseInt(minRaw, 10);
-      const max = parseInt(maxRaw, 10);
+        } else {
+          const [minRaw, maxRaw] = filters.priceRange.split('-');
+          const min = parseInt(minRaw, 10);
+          const max = parseInt(maxRaw, 10);
       result = result.filter((tech) => {
         const rate = tech.priceWithSurge ?? tech.hourlyRate ?? 0;
         return rate >= min && rate <= max;
       });
-    }
-  }
+        }
+      }
 
-  if (filters.experience !== 'all') {
-    if (filters.experience.endsWith('+')) {
-      const min = parseInt(filters.experience, 10);
-      result = result.filter((tech) => (tech.yearsOfExperience || 0) >= min);
-    } else {
-      const [minRaw, maxRaw] = filters.experience.split('-');
-      const min = parseInt(minRaw, 10);
-      const max = parseInt(maxRaw, 10);
-      result = result.filter((tech) => {
-        const yrs = tech.yearsOfExperience || 0;
-        return yrs >= min && yrs <= max;
-      });
-    }
-  }
+      if (filters.experience !== 'all') {
+        if (filters.experience.endsWith('+')) {
+          const min = parseInt(filters.experience, 10);
+          result = result.filter((tech) => (tech.yearsOfExperience || 0) >= min);
+        } else {
+          const [minRaw, maxRaw] = filters.experience.split('-');
+          const min = parseInt(minRaw, 10);
+          const max = parseInt(maxRaw, 10);
+          result = result.filter((tech) => {
+            const yrs = tech.yearsOfExperience || 0;
+            return yrs >= min && yrs <= max;
+          });
+        }
+      }
 
-  if (filters.verified) {
-    result = result.filter((tech) => tech.verified || tech.isVerified);
-  }
+      if (filters.verified) {
+        result = result.filter((tech) => tech.verified || tech.isVerified);
+      }
 
-  if (filters.responseTime !== 'all') {
-    const threshold = responseThresholdMap[filters.responseTime];
-    if (threshold) {
-      result = result.filter((tech) => (tech.responseTimeMinutes || Infinity) <= threshold);
-    }
-  }
+      if (filters.responseTime !== 'all') {
+        const threshold = responseThresholdMap[filters.responseTime];
+        if (threshold) {
+          result = result.filter((tech) => (tech.responseTimeMinutes || Infinity) <= threshold);
+        }
+      }
 
   const compareNumbers = (a, b, direction = 'asc') => {
     const safeA = Number.isFinite(a) ? a : Number.POSITIVE_INFINITY;
@@ -102,24 +102,24 @@ const filterTechnicians = (source = [], filters = defaultFilters) => {
     return direction === 'asc' ? safeA - safeB : safeB - safeA;
   };
 
-  switch (filters.sortBy) {
-    case 'distance':
-      result.sort((a, b) => compareNumbers(a.distanceKm, b.distanceKm));
-      break;
-    case 'rating':
-      result.sort(
-        (a, b) => (b.ratingValue ?? parseFloat(b.rating)) - (a.ratingValue ?? parseFloat(a.rating))
-      );
-      break;
-    case 'price-low':
+      switch (filters.sortBy) {
+        case 'distance':
+          result.sort((a, b) => compareNumbers(a.distanceKm, b.distanceKm));
+          break;
+        case 'rating':
+          result.sort(
+            (a, b) => (b.ratingValue ?? parseFloat(b.rating)) - (a.ratingValue ?? parseFloat(a.rating))
+          );
+          break;
+        case 'price-low':
       result.sort((a, b) =>
         compareNumbers(
           a.priceWithSurge ?? a.hourlyRate,
           b.priceWithSurge ?? b.hourlyRate
         )
       );
-      break;
-    case 'price-high':
+          break;
+        case 'price-high':
       result.sort((a, b) =>
         compareNumbers(
           a.priceWithSurge ?? a.hourlyRate,
@@ -127,18 +127,18 @@ const filterTechnicians = (source = [], filters = defaultFilters) => {
           'desc'
         )
       );
-      break;
-    case 'experience':
-      result.sort((a, b) => compareNumbers(a.yearsOfExperience, b.yearsOfExperience, 'desc'));
-      break;
-    case 'response-time':
-      result.sort((a, b) => compareNumbers(a.responseTimeMinutes, b.responseTimeMinutes));
-      break;
-    default:
-      break;
-  }
+          break;
+        case 'experience':
+          result.sort((a, b) => compareNumbers(a.yearsOfExperience, b.yearsOfExperience, 'desc'));
+          break;
+        case 'response-time':
+          result.sort((a, b) => compareNumbers(a.responseTimeMinutes, b.responseTimeMinutes));
+          break;
+        default:
+          break;
+      }
 
-  return result;
+      return result;
 };
 
 const TechnicianSelection = () => {

@@ -20,21 +20,38 @@ const BookingCard = ({ booking, onTrack, onReschedule, onCancel, onContact, onRa
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return '—';
     const date = new Date(dateString);
-    return date?.toLocaleDateString('en-US', {
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('en-IN', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
   const formatTime = (timeString) => {
+    if (!timeString) return '—';
     const time = new Date(`2000-01-01T${timeString}`);
-    return time?.toLocaleTimeString('en-US', {
+    if (Number.isNaN(time.getTime())) return '—';
+    return time.toLocaleTimeString('en-IN', {
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
     });
+  };
+
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined) return '₹0';
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0,
+      }).format(Number(value) || 0);
+    } catch {
+      return `₹${value}`;
+    }
   };
 
   return (
@@ -64,33 +81,41 @@ const BookingCard = ({ booking, onTrack, onReschedule, onCancel, onContact, onRa
         <div className="relative">
           <Image
             src={booking?.technician?.avatar}
-            alt={booking?.technician?.name}
+            alt={booking?.technician?.name || 'Technician'}
             className="w-12 h-12 rounded-full object-cover"
           />
-          {booking?.technician?.isOnline && (
+          {booking?.technician?.isOnline ? (
             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-success rounded-full border-2 border-white"></div>
-          )}
+          ) : null}
         </div>
         <div className="flex-1">
-          <h4 className="font-medium text-text-primary">{booking?.technician?.name}</h4>
+          <h4 className="font-medium text-text-primary">
+            {booking?.technician?.name || 'Awaiting assignment'}
+          </h4>
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <div className="flex items-center gap-1">
               <Icon name="Star" size={14} className="text-warning fill-current" />
-              <span>{booking?.technician?.rating}</span>
+              <span>{booking?.technician?.rating ?? '—'}</span>
             </div>
-            <span>•</span>
-            <span>{booking?.technician?.experience} years exp</span>
+            {booking?.technician?.experience != null && (
+              <>
+                <span>•</span>
+                <span>{booking?.technician?.experience} years exp</span>
+              </>
+            )}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onContact(booking)}
-          className="text-primary hover:text-primary/80"
-        >
-          <Icon name="MessageCircle" size={16} className="mr-1" />
-          Chat
-        </Button>
+        {onContact && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onContact(booking)}
+            className="text-primary hover:text-primary/80"
+          >
+            <Icon name="MessageCircle" size={16} className="mr-1" />
+            Chat
+          </Button>
+        )}
       </div>
       {/* Schedule Info */}
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -108,11 +133,13 @@ const BookingCard = ({ booking, onTrack, onReschedule, onCancel, onContact, onRa
         </div>
         <div className="flex items-center gap-2 text-sm">
           <Icon name="DollarSign" size={16} className="text-text-secondary" />
-          <span className="text-text-primary font-medium">${booking?.price}</span>
+          <span className="text-text-primary font-medium">
+            {formatCurrency(booking?.price)}
+          </span>
         </div>
       </div>
       {/* Progress Bar for Active Bookings */}
-      {booking?.status === 'active' && (
+      {booking?.status === 'active' && typeof booking?.progress === 'number' && (
         <div className="mb-4">
           <div className="flex items-center justify-between text-sm mb-2">
             <span className="text-text-secondary">Progress</span>

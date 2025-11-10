@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const LiveMap = ({ 
-  userLocation, 
-  technicianLocation, 
-  route, 
-  onRecenterMap, 
+const LiveMap = ({
+  userLocation,
+  technicianLocation,
+  serviceLocation,
+  route,
+  onRecenterMap,
   onToggleTraffic,
-  showTraffic = false 
+  showTraffic = false,
 }) => {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -27,18 +28,16 @@ const LiveMap = ({
   };
 
   const generateMapUrl = () => {
-    if (!userLocation || !technicianLocation) return '';
-    
-    const userLat = userLocation?.lat;
-    const userLng = userLocation?.lng;
-    const techLat = technicianLocation?.lat;
-    const techLng = technicianLocation?.lng;
-    
-    // Create a center point between user and technician
-    const centerLat = (userLat + techLat) / 2;
-    const centerLng = (userLng + techLng) / 2;
-    
-    return `https://www.google.com/maps?q=${centerLat},${centerLng}&z=14&output=embed`;
+    const points = [userLocation, technicianLocation, serviceLocation].filter(
+      (point) => point?.lat && point?.lng,
+    );
+
+    if (!points.length) return '';
+
+    const centerLat = points.reduce((sum, point) => sum + point.lat, 0) / points.length;
+    const centerLng = points.reduce((sum, point) => sum + point.lng, 0) / points.length;
+
+    return `https://www.google.com/maps?q=${centerLat},${centerLng}&z=13&output=embed`;
   };
 
   return (
@@ -111,6 +110,12 @@ const LiveMap = ({
           <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
           <span className="text-sm font-medium text-foreground">Technician</span>
         </div>
+        {serviceLocation ? (
+          <div className="flex items-center space-x-2 bg-card/90 backdrop-blur-sm px-3 py-2 rounded-lg trust-shadow">
+            <div className="w-3 h-3 bg-primary rounded-full"></div>
+            <span className="text-sm font-medium text-foreground">Service Address</span>
+          </div>
+        ) : null}
       </div>
       {/* Route Information */}
       {route && (

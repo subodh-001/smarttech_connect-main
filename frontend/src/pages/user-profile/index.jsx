@@ -145,25 +145,92 @@ const UserProfile = () => {
     const loadDashboard = async () => {
       setFetchingDashboard(true);
       try {
-        const { data } = await axios.get('/api/dashboard/user', {
-          headers: {
+        const headers = {
             'Cache-Control': 'no-cache',
             Pragma: 'no-cache',
-          },
-        });
+        };
 
-        setActiveServices(data?.activeServices ?? []);
-        setRecentBookings((data?.recentBookings ?? []).slice(0, 5));
+        if (isTechnician) {
+          const { data: requestsData } = await axios.get('/api/service-requests', { headers });
+          const requests = Array.isArray(requestsData) ? requestsData : [];
+          const activeStatusSet = new Set(['pending', 'confirmed', 'in_progress']);
+
+          const active = requests
+            .filter((request) => activeStatusSet.has(request.status))
+            .map((request) => ({
+              id: request.id,
+              category: request.title || request.category,
+              location: request.locationAddress,
+              status: request.status,
+              technician: request.technician || null,
+              customer: request.customer || null,
+              partyLabel: 'Customer',
+              partyName: request.customer?.name || request.customer?.email || 'Customer',
+              amount: request.finalCost || request.budgetMax || request.budgetMin || null,
+            }));
+
+          const completed = requests
+            .filter((request) => request.status === 'completed')
+            .sort((a, b) => new Date(b.updatedAt || b.completionDate || 0) - new Date(a.updatedAt || a.completionDate || 0));
+
+          const recent = completed.slice(0, 5).map((request) => ({
+            id: request.id,
+            category: request.title || request.category,
+            status: request.status,
+            technician: request.technician || null,
+            customer: request.customer || null,
+            partyLabel: 'Customer',
+            partyName: request.customer?.name || request.customer?.email || 'Customer',
+            amount: request.finalCost || request.budgetMax || request.budgetMin || null,
+          }));
+
+          const totalEarned = completed.reduce((sum, request) => sum + (request.finalCost || 0), 0);
+          const averageRating =
+            completed.length > 0
+              ? (
+                  completed.reduce((sum, request) => sum + (request.reviewRating || 0), 0) /
+                  completed.length
+                ).toFixed(1)
+              : 0;
+
+          setActiveServices(active);
+          setRecentBookings(recent);
+          setStats({
+            totalBookings: requests.length,
+            completedServices: completed.length,
+            totalSpent: Number(totalEarned.toFixed(0)),
+            moneySaved: Number(totalEarned.toFixed(0)),
+            avgRatingGiven: averageRating,
+          });
+        } else {
+          const { data } = await axios.get('/api/dashboard/user', { headers });
+          const normalizedActive = (data?.activeServices ?? []).map((service) => ({
+            ...service,
+            partyLabel: 'Technician',
+            partyName: service?.technician?.name || null,
+          }));
+          const normalizedRecent = (data?.recentBookings ?? []).slice(0, 5).map((booking) => ({
+            ...booking,
+            partyLabel: 'Technician',
+            partyName: booking?.technician?.name || null,
+          }));
+
+          setActiveServices(normalizedActive);
+          setRecentBookings(normalizedRecent);
         setStats(data?.stats ?? null);
+        }
       } catch (error) {
         console.error('Failed to load dashboard overview:', error);
+        setActiveServices([]);
+        setRecentBookings([]);
+        setStats(null);
       } finally {
         setFetchingDashboard(false);
       }
     };
 
     loadDashboard();
-  }, [user]);
+  }, [user, isTechnician]);
 
   useEffect(() => {
     if (!isTechnician) {
@@ -896,9 +963,12 @@ const UserProfile = () => {
                       <p className="mt-1 text-xs text-slate-500">{service.location}</p>
                     </div>
                     <div className="mt-3 flex items-center gap-3 sm:mt-0">
-                      {service.technician ? (
+                      {(service.partyName || service.technician?.name) ? (
                         <span className="text-xs text-slate-500">
-                          Technician: <span className="font-medium">{service.technician.name}</span>
+                          {(service.partyLabel || 'Technician')}:{' '}
+                          <span className="font-medium">
+                            {service.partyName || service.technician?.name}
+                          </span>
                         </span>
                       ) : null}
                       <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
@@ -929,8 +999,12 @@ const UserProfile = () => {
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      {booking.technician?.name
-                        ? `Technician • ${booking.technician.name}`
+                      {booking.partyName || booking.technician?.name
+                        ? `${isTechnician ? booking.partyLabel || 'Customer' : booking.partyLabel || 'Technician'} • ${
+                            booking.partyName || booking.technician?.name
+                          }`
+                        : isTechnician
+                        ? 'Waiting for customer confirmation'
                         : 'Technician assignment pending'}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">

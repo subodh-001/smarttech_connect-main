@@ -33,7 +33,7 @@ const MessageInput = ({
       onSendMessage({
         type: 'text',
         content: message?.trim(),
-        timestamp: new Date()
+        timestamp: new Date(),
       });
       setMessage('');
       setShowQuickResponses(false);
@@ -75,22 +75,24 @@ const MessageInput = ({
   };
 
   const handleQuickResponse = (response) => {
+    if (disabled) return;
     onSendMessage({
       type: 'text',
       content: response,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
     setShowQuickResponses(false);
   };
 
   const handleLocationShare = () => {
+    if (disabled) return;
     if (navigator.geolocation) {
       navigator.geolocation?.getCurrentPosition(
         (position) => {
           onSendLocation({
             latitude: position?.coords?.latitude,
             longitude: position?.coords?.longitude,
-            timestamp: new Date()
+            timestamp: new Date(),
           });
         },
         (error) => {
@@ -123,6 +125,7 @@ const MessageInput = ({
                 size="sm"
                 onClick={() => handleQuickResponse(response)}
                 className="text-left justify-start text-xs"
+                disabled={disabled}
               >
                 {response}
               </Button>

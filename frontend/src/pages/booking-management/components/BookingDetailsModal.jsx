@@ -7,21 +7,25 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
   if (!isOpen || !booking) return null;
 
   const formatDate = (dateString) => {
+    if (!dateString) return '—';
     const date = new Date(dateString);
-    return date?.toLocaleDateString('en-US', {
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('en-IN', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
   const formatTime = (timeString) => {
+    if (!timeString) return '—';
     const time = new Date(`2000-01-01T${timeString}`);
-    return time?.toLocaleTimeString('en-US', {
+    if (Number.isNaN(time.getTime())) return '—';
+    return time.toLocaleTimeString('en-IN', {
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
     });
   };
 
@@ -39,6 +43,21 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
         return 'bg-secondary text-secondary-foreground';
     }
   };
+
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined) return '₹0';
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0,
+      }).format(Number(value) || 0);
+    } catch {
+      return `₹${value}`;
+    }
+  };
+
+  const timeline = Array.isArray(booking?.timeline) ? booking.timeline.filter(Boolean) : [];
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -84,13 +103,20 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
                 <div className="flex items-center gap-2 text-sm text-text-secondary mb-1">
                   <div className="flex items-center gap-1">
                     <Icon name="Star" size={14} className="text-warning fill-current" />
-                    <span>{booking?.technician?.rating}</span>
+                  <span>{booking?.technician?.rating ?? '—'}</span>
                   </div>
-                  <span>•</span>
-                  <span>{booking?.technician?.experience} years experience</span>
+                {booking?.technician?.experience != null && (
+                  <>
+                    <span>•</span>
+                    <span>{booking?.technician?.experience} years experience</span>
+                  </>
+                )}
                 </div>
+              {booking?.technician?.specialization && (
                 <p className="text-sm text-text-secondary">{booking?.technician?.specialization}</p>
+              )}
               </div>
+            {onContact && (
               <Button
                 variant="outline"
                 size="sm"
@@ -99,6 +125,7 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
                 <Icon name="MessageCircle" size={16} className="mr-2" />
                 Contact
               </Button>
+            )}
             </div>
           </div>
 
@@ -127,7 +154,7 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
                   <Icon name="DollarSign" size={16} className="text-text-secondary" />
                   <div>
                     <p className="text-sm text-text-secondary">Price</p>
-                    <p className="font-medium text-text-primary">${booking?.price}</p>
+                    <p className="font-medium text-text-primary">{formatCurrency(booking?.price)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -197,8 +224,9 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
           {/* Booking History */}
           <div>
             <h3 className="font-medium text-text-primary mb-3">Booking Timeline</h3>
+          {timeline.length ? (
             <div className="space-y-3">
-              {booking?.timeline?.map((event, index) => (
+              {timeline.map((event, index) => (
                 <div key={index} className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                   <div>
@@ -208,6 +236,11 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-text-secondary bg-muted p-3 rounded-lg">
+              Timeline updates will appear here once the service progresses.
+            </p>
+          )}
           </div>
         </div>
 

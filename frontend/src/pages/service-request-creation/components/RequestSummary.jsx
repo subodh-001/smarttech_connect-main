@@ -127,7 +127,7 @@ const RequestSummary = ({
           </div>
           {description ? (
             meetsDescriptionRequirement ? (
-              <Icon name="CheckCircle" size={16} className="text-success" />
+            <Icon name="CheckCircle" size={16} className="text-success" />
             ) : (
               <Icon name="AlertCircle" size={16} className="text-warning" />
             )
@@ -202,7 +202,7 @@ const RequestSummary = ({
           <span className={`text-sm font-medium ${
             isComplete ? "text-success" : "text-warning"
           }`}>
-            {isComplete
+            {isComplete 
               ? 'Ready to find technicians!'
               : !meetsDescriptionRequirement && trimmedDescription.length > 0
               ? `Add ${descriptionMinLength - trimmedDescription.length} more characters to your description`

@@ -366,9 +366,13 @@ const TechnicianDashboard = () => {
     setJobRequests((prev) => prev.filter((job) => job.id !== jobId));
   };
 
-  const handleUpdateJobStatus = async (jobId) => {
+  const handleUpdateJobStatus = async (job, nextStatus) => {
+    if (!job?.id || !nextStatus) {
+      return;
+    }
+
     try {
-      await axios.patch(`/api/service-requests/${jobId}/status`, { status: 'completed' });
+      await axios.patch(`/api/service-requests/${job.id}/status`, { status: nextStatus });
       await fetchDashboardData();
     } catch (error) {
       console.error('Failed to update job status:', error);

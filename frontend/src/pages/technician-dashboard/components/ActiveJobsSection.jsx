@@ -35,10 +35,32 @@ const ActiveJobsSection = ({
 }) => {
   const getStatusColor = (status) => {
     switch (status) {
-      case 'in-progress': return 'text-primary bg-primary/10 border-primary/20';
-      case 'on-way': return 'text-accent bg-accent/10 border-accent/20';
-      case 'completed': return 'text-success bg-success/10 border-success/20';
-      default: return 'text-text-secondary bg-muted border-border';
+      case 'confirmed':
+        return 'text-primary bg-primary/10 border-primary/20';
+      case 'in_progress':
+        return 'text-accent bg-accent/10 border-accent/20';
+      case 'completed':
+        return 'text-success bg-success/10 border-success/20';
+      case 'cancelled':
+        return 'text-error bg-error/10 border-error/20';
+      default:
+        return 'text-text-secondary bg-muted border-border';
+    }
+  };
+
+  const formatStatusLabel = (status) => {
+    if (!status) return 'PENDING';
+    return status.replace(/_/g, ' ').toUpperCase();
+  };
+
+  const getNextStatusMeta = (status) => {
+    switch (status) {
+      case 'confirmed':
+        return { next: 'in_progress', label: 'Start Job', icon: 'Play', variant: 'secondary' };
+      case 'in_progress':
+        return { next: 'completed', label: 'Mark Completed', icon: 'Check', variant: 'success' };
+      default:
+        return { next: null, label: 'Status Updated', icon: 'RefreshCw', variant: 'secondary' };
     }
   };
 
@@ -54,7 +76,9 @@ const ActiveJobsSection = ({
 
   return (
     <div className="space-y-4">
-      {activeJobs?.map((job) => (
+      {activeJobs?.map((job) => {
+        const statusMeta = getNextStatusMeta(job?.status);
+        return (
         <div key={job?.id} className="bg-card rounded-lg border border-border p-6 shadow-subtle">
           <div className="flex items-start justify-between mb-4">
             <div>
@@ -62,7 +86,7 @@ const ActiveJobsSection = ({
               <p className="text-sm text-text-secondary">{job?.customerName}</p>
             </div>
             <div className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(job?.status)}`}>
-              {job?.status?.replace('-', ' ')?.toUpperCase()}
+              {formatStatusLabel(job?.status)}
             </div>
           </div>
 
@@ -152,17 +176,19 @@ const ActiveJobsSection = ({
               Message
             </Button>
             <Button
-              variant="secondary"
+              variant={statusMeta.variant}
               size="sm"
-              onClick={() => onUpdateStatus(job?.id)}
-              iconName="RefreshCw"
+              disabled={!statusMeta.next}
+              onClick={() => statusMeta.next && onUpdateStatus?.(job, statusMeta.next)}
+              iconName={statusMeta.icon}
               iconPosition="left"
             >
-              Update Status
+              {statusMeta.label}
             </Button>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

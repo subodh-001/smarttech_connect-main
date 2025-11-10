@@ -8,6 +8,7 @@ const RescheduleModal = ({ booking, isOpen, onClose, onConfirm }) => {
   const [selectedTime, setSelectedTime] = useState('');
   const [reason, setReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   if (!isOpen || !booking) return null;
 
@@ -18,31 +19,31 @@ const RescheduleModal = ({ booking, isOpen, onClose, onConfirm }) => {
 
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) return;
-    
+
     setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      onConfirm({
+    setError(null);
+
+    try {
+      await onConfirm?.({
         bookingId: booking?.id,
         newDate: selectedDate,
         newTime: selectedTime,
-        reason: reason
+        reason,
       });
+      handleClose();
+    } catch (err) {
+      setError(err?.message || 'Failed to reschedule booking. Please try again.');
+    } finally {
       setIsLoading(false);
-      onClose();
-      // Reset form
-      setSelectedDate('');
-      setSelectedTime('');
-      setReason('');
-    }, 1500);
+    }
   };
 
   const handleClose = () => {
     setSelectedDate('');
     setSelectedTime('');
     setReason('');
-    onClose();
+    setError(null);
+    onClose?.();
   };
 
   // Get minimum date (today)
@@ -87,6 +88,12 @@ const RescheduleModal = ({ booking, isOpen, onClose, onConfirm }) => {
               </div>
             </div>
           </div>
+
+          {error ? (
+            <div className="rounded-md border border-error/20 bg-error/10 px-3 py-2 text-sm text-error">
+              {error}
+            </div>
+          ) : null}
 
           {/* New Schedule */}
           <div className="space-y-4">

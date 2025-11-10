@@ -9,6 +9,7 @@ const RatingModal = ({ booking, isOpen, onClose, onSubmit }) => {
   const [review, setReview] = useState('');
   const [selectedAspects, setSelectedAspects] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   if (!isOpen || !booking) return null;
 
@@ -35,31 +36,31 @@ const RatingModal = ({ booking, isOpen, onClose, onSubmit }) => {
 
   const handleSubmit = async () => {
     if (rating === 0) return;
-    
+
     setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      onSubmit({
+    setError(null);
+
+    try {
+      await onSubmit?.({
         bookingId: booking?.id,
         rating,
         review,
-        aspects: selectedAspects
+        aspects: selectedAspects,
       });
+      handleClose();
+    } catch (err) {
+      setError(err?.message || 'Failed to submit rating. Please try again.');
+    } finally {
       setIsLoading(false);
-      onClose();
-      // Reset form
-      setRating(0);
-      setReview('');
-      setSelectedAspects([]);
-    }, 1500);
+    }
   };
 
   const handleClose = () => {
     setRating(0);
     setReview('');
     setSelectedAspects([]);
-    onClose();
+    setError(null);
+    onClose?.();
   };
 
   const getRatingText = (rating) => {
@@ -105,6 +106,12 @@ const RatingModal = ({ booking, isOpen, onClose, onSubmit }) => {
               <p className="text-sm text-text-secondary">{booking?.technician?.specialization}</p>
             </div>
           </div>
+
+          {error ? (
+            <div className="rounded-md border border-error/20 bg-error/10 px-3 py-2 text-sm text-error">
+              {error}
+            </div>
+          ) : null}
 
           {/* Star Rating */}
           <div className="text-center">
@@ -180,7 +187,9 @@ const RatingModal = ({ booking, isOpen, onClose, onSubmit }) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-text-secondary">Total Cost:</span>
-                <span className="text-text-primary font-medium">${booking?.price}</span>
+                <span className="text-text-primary font-medium">
+                  ₹{Number(booking?.price || 0).toLocaleString('en-IN')}
+                </span>
               </div>
             </div>
           </div>

@@ -32,6 +32,7 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
   } else {
     navigationItems = [
       { label: 'Dashboard', path: '/user-dashboard', icon: 'LayoutDashboard' },
+      { label: 'My Bookings', path: '/booking-management', icon: 'CalendarCheck' },
       { label: 'Request Service', path: '/service-request-creation', icon: 'Plus' },
       { label: 'Find Technicians', path: '/technician-selection', icon: 'Users' },
       { label: 'Track Service', path: '/live-tracking', icon: 'MapPin' },

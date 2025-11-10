@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import ConversationList from './components/ConversationList';
@@ -6,325 +7,237 @@ import ConversationHeader from './components/ConversationHeader';
 import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
 import BookingContextPanel from './components/BookingContextPanel';
+import { useAuth } from '../../contexts/NewAuthContext';
+
+const fallbackAvatar = (name = 'User') =>
+  `https://ui-avatars.com/api/?background=6366F1&color=fff&name=${encodeURIComponent(name)}`;
+
+const formatCurrencyINR = (amount) => {
+  if (amount == null) return null;
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(Number(amount) || 0);
+  } catch (_) {
+    return `₹${amount}`;
+  }
+};
 
 const ChatCommunication = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, userProfile } = useAuth();
+
+  const [conversations, setConversations] = useState([]);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [conversationError, setConversationError] = useState(null);
+
   const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageError, setMessageError] = useState(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isBookingPanelExpanded, setIsBookingPanelExpanded] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
+  const [isMobileView, setIsMobileView] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
 
-  // Mock current user data
-  const currentUser = {
-    id: "user_123",
-    role: "user",
-    name: "John Smith",
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face"
-  };
+  const role = user?.role || userProfile?.role || 'user';
+  const currentUserId =
+    user?.id ||
+    user?._id ||
+    userProfile?.id ||
+    userProfile?._id ||
+    userProfile?.user_id ||
+    null;
 
-  // Mock conversations data
-  const [conversations] = useState([
-    {
-      id: "conv_1",
-      participant: {
-        id: "tech_456",
-        name: "Mike Rodriguez",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-        role: "technician",
-        status: "online",
-        rating: 4.8,
-        completedJobs: 127,
-        lastSeen: null
-      },
-      booking: {
-        id: "BK001",
-        serviceType: "Plumbing Repair",
-        category: "Plumbing",
-        status: "in_progress",
-        scheduledDate: "2025-01-08",
-        scheduledTime: "14:00",
-        budget: 150,
-        priority: "high",
-        description: `Kitchen sink is completely blocked and water is backing up into the dishwasher. This started yesterday evening after we ran the garbage disposal. We've tried using a plunger and drain cleaner but nothing is working. The water level keeps rising and we're worried about overflow damage to the kitchen floor.`,
-        location: {
-          address: "1234 Oak Street, Apt 2B",
-          city: "San Francisco",
-          state: "CA",
-          zipCode: "94102"
-        }
-      },
-      lastMessage: {
-        id: "msg_15",
-        senderId: "tech_456",
-        content: "I'm about 5 minutes away from your location. I have all the necessary tools to fix the blockage.",
-        timestamp: new Date(Date.now() - 300000),
-        type: "text",
-        deliveryStatus: "read"
-      },
-      unreadCount: 2
-    },
-    {
-      id: "conv_2",
-      participant: {
-        id: "tech_789",
-        name: "Sarah Chen",
-        avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face",
-        role: "technician",
-        status: "away",
-        rating: 4.9,
-        completedJobs: 89,
-        lastSeen: new Date(Date.now() - 1800000)
-      },
-      booking: {
-        id: "BK002",
-        serviceType: "AC Repair",
-        category: "HVAC",
-        status: "completed",
-        scheduledDate: "2025-01-07",
-        scheduledTime: "10:00",
-        budget: 200,
-        priority: "normal",
-        description: "Air conditioning unit not cooling properly. Temperature stays around 78°F even when set to 68°F.",
-        location: {
-          address: "5678 Pine Avenue",
-          city: "San Francisco",
-          state: "CA",
-          zipCode: "94103"
-        }
-      },
-      lastMessage: {
-        id: "msg_28",
-        senderId: "user_123",
-        content: "Thank you so much! The AC is working perfectly now. Great service!",
-        timestamp: new Date(Date.now() - 86400000),
-        type: "text",
-        deliveryStatus: "read"
-      },
-      unreadCount: 0
-    },
-    {
-      id: "conv_3",
-      participant: {
-        id: "tech_321",
-        name: "David Wilson",
-        avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&h=150&fit=crop&crop=face",
-        role: "technician",
-        status: "offline",
-        rating: 4.7,
-        completedJobs: 156,
-        lastSeen: new Date(Date.now() - 7200000)
-      },
-      booking: {
-        id: "BK003",
-        serviceType: "Electrical Wiring",
-        category: "Electrical",
-        status: "confirmed",
-        scheduledDate: "2025-01-09",
-        scheduledTime: "09:00",
-        budget: 300,
-        priority: "urgent",
-        description: "Multiple outlets in the living room stopped working suddenly. Need urgent electrical inspection.",
-        location: {
-          address: "9012 Elm Street",
-          city: "San Francisco",
-          state: "CA",
-          zipCode: "94104"
-        }
-      },
-      lastMessage: {
-        id: "msg_42",
-        senderId: "tech_321",
-        content: "I'll be there first thing tomorrow morning. Please don't use any electrical appliances in that room until I check the wiring.",
-        timestamp: new Date(Date.now() - 3600000),
-        type: "text",
-        deliveryStatus: "delivered"
-      },
-      unreadCount: 0
-    }
-  ]);
+  const currentUser = useMemo(
+    () => ({
+      id: currentUserId,
+      name:
+        userProfile?.full_name ||
+        userProfile?.fullName ||
+        user?.fullName ||
+        user?.name ||
+        user?.email ||
+        'You',
+      avatar:
+        userProfile?.avatar_url ||
+        user?.avatarUrl ||
+        fallbackAvatar(
+          userProfile?.full_name ||
+            userProfile?.fullName ||
+            user?.fullName ||
+            user?.email ||
+            'You'
+        ),
+    }),
+    [currentUserId, user, userProfile]
+  );
 
-  // Mock messages data
-  const [messages, setMessages] = useState([
-    {
-      id: "msg_1",
-      senderId: "user_123",
-      senderName: "John Smith",
-      senderAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      content: "Hi Mike, I have a plumbing emergency. My kitchen sink is completely blocked.",
-      timestamp: new Date(Date.now() - 7200000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_2",
-      senderId: "tech_456",
-      senderName: "Mike Rodriguez",
-      senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      content: "Hello John! I can help you with that. Can you describe the issue in more detail?",
-      timestamp: new Date(Date.now() - 7000000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_3",
-      senderId: "user_123",
-      senderName: "John Smith",
-      senderAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      content: "The water is backing up into the dishwasher and I'm worried about overflow. I tried using a plunger but it didn't work.",
-      timestamp: new Date(Date.now() - 6800000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_4",
-      senderId: "tech_456",
-      senderName: "Mike Rodriguez",
-      senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      content: "That sounds like a serious blockage in the main drain line. I can be there within 30 minutes. My rate is $120/hour plus parts.",
-      timestamp: new Date(Date.now() - 6600000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_5",
-      senderId: "user_123",
-      senderName: "John Smith",
-      senderAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      content: "Perfect! That works within my budget. Please come as soon as possible.",
-      timestamp: new Date(Date.now() - 6400000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_6",
-      senderId: "tech_456",
-      senderName: "Mike Rodriguez",
-      senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      content: "Great! I'm gathering my tools now. Can you share your exact location?",
-      timestamp: new Date(Date.now() - 6200000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_7",
-      senderId: "user_123",
-      senderName: "John Smith",
-      senderAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      content: "",
-      timestamp: new Date(Date.now() - 6000000),
-      type: "location",
-      locationName: "1234 Oak Street, Apt 2B, San Francisco, CA",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_8",
-      senderId: "tech_456",
-      senderName: "Mike Rodriguez",
-      senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      content: "Booking confirmed for emergency plumbing repair at 1234 Oak Street, Apt 2B. Estimated arrival: 2:30 PM",
-      timestamp: new Date(Date.now() - 5800000),
-      type: "booking_update",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_9",
-      senderId: "user_123",
-      senderName: "John Smith",
-      senderAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      content: "Here's a photo of the current situation",
-      timestamp: new Date(Date.now() - 5600000),
-      type: "image",
-      imageUrl: "https://images.pexels.com/photos/4239091/pexels-photo-4239091.jpeg?w=400&h=300&fit=crop",
-      caption: "Water backing up in kitchen sink",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_10",
-      senderId: "tech_456",
-      senderName: "Mike Rodriguez",
-      senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      content: "I can see the issue clearly. This looks like a grease buildup in the main line. I'll bring the drain snake and high-pressure jetter.",
-      timestamp: new Date(Date.now() - 5400000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_11",
-      senderId: "tech_456",
-      senderName: "Mike Rodriguez",
-      senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      content: "I'm on my way now. ETA 15 minutes.",
-      timestamp: new Date(Date.now() - 1800000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_12",
-      senderId: "user_123",
-      senderName: "John Smith",
-      senderAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      content: "Thank you! I'll be waiting. The building entrance is on Oak Street.",
-      timestamp: new Date(Date.now() - 1200000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_13",
-      senderId: "tech_456",
-      senderName: "Mike Rodriguez",
-      senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      content: "Perfect! I can see the building now. Just parking.",
-      timestamp: new Date(Date.now() - 600000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_14",
-      senderId: "user_123",
-      senderName: "John Smith",
-      senderAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      content: "Great! I'll buzz you in. Apartment 2B on the second floor.",
-      timestamp: new Date(Date.now() - 480000),
-      type: "text",
-      deliveryStatus: "read"
-    },
-    {
-      id: "msg_15",
-      senderId: "tech_456",
-      senderName: "Mike Rodriguez",
-      senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      content: "I'm about 5 minutes away from your location. I have all the necessary tools to fix the blockage.",
-      timestamp: new Date(Date.now() - 300000),
-      type: "text",
-      deliveryStatus: "delivered"
-    }
-  ]);
-
-  // Handle window resize
   useEffect(() => {
     const handleResize = () => {
-      setIsMobileView(window.innerWidth < 768);
+      setIsMobileView(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Set initial conversation from URL params or default to first conversation
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const conversationId = params?.get('conversation');
-    
-    if (conversationId && conversations?.find(c => c?.id === conversationId)) {
-      setSelectedConversationId(conversationId);
-    } else if (conversations?.length > 0 && !isMobileView) {
-      setSelectedConversationId(conversations?.[0]?.id);
-    }
-  }, [location?.search, conversations, isMobileView]);
+  const mapMessageFromApi = useCallback(
+    (message) => {
+      if (!message) return null;
+      const metadata = message.metadata || {};
+      const base = {
+        id: message.id,
+        senderId: message.sender?.id,
+        senderName: message.sender?.name,
+        senderAvatar: message.sender?.avatar || fallbackAvatar(message.sender?.name),
+        type: message.type || 'text',
+        content: message.content || '',
+        metadata,
+        timestamp: message.createdAt,
+        deliveryStatus: message.deliveryStatus || 'sent',
+      };
 
-  const selectedConversation = conversations?.find(c => c?.id === selectedConversationId);
+      if (base.type === 'image') {
+        base.imageUrl = metadata.imageUrl || base.content;
+        base.caption = metadata.caption || '';
+      }
+
+      if (base.type === 'location') {
+        const { latitude, longitude } = metadata;
+        const label =
+          metadata.label ||
+          metadata.address ||
+          (latitude != null && longitude != null
+            ? `${Number(latitude).toFixed(4)}, ${Number(longitude).toFixed(4)}`
+            : 'Shared location');
+        base.locationName = label;
+      }
+
+      return base;
+    },
+    []
+  );
+
+  const loadConversations = useCallback(async () => {
+    setLoadingConversations(true);
+    setConversationError(null);
+    try {
+      const { data } = await axios.get('/api/service-requests/conversations');
+      setConversations(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+      setConversationError(
+        error?.response?.data?.error || 'Unable to load conversations right now.'
+      );
+      setConversations([]);
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
+
+  const fetchMessages = useCallback(
+    async (conversationId) => {
+      if (!conversationId) return;
+      setLoadingMessages(true);
+      setMessageError(null);
+      try {
+        const { data } = await axios.get(`/api/service-requests/${conversationId}/messages`);
+        const mappedMessages = Array.isArray(data?.messages)
+          ? data.messages.map(mapMessageFromApi)
+          : [];
+        setMessages(mappedMessages);
+
+        const latestMessage = mappedMessages.length
+          ? mappedMessages[mappedMessages.length - 1]
+          : null;
+
+        setConversations((prev) =>
+          prev.map((conversation) =>
+            conversation.id === conversationId
+              ? {
+                  ...conversation,
+                  unreadCount: 0,
+                  lastMessage:
+                    latestMessage
+                      ? {
+                          id: latestMessage.id,
+                          senderId: latestMessage.senderId,
+                          senderName: latestMessage.senderName,
+                          content: latestMessage.content,
+                          type: latestMessage.type,
+                          metadata: latestMessage.metadata,
+                          timestamp: latestMessage.timestamp,
+                          deliveryStatus: latestMessage.deliveryStatus,
+                        }
+                      : conversation.lastMessage,
+                }
+              : conversation
+          )
+        );
+      } catch (error) {
+        console.error('Failed to load messages:', error);
+        setMessageError(error?.response?.data?.error || 'Unable to load messages right now.');
+        setMessages([]);
+      } finally {
+        setLoadingMessages(false);
+      }
+    },
+    [mapMessageFromApi]
+  );
+
+  useEffect(() => {
+    if (loadingConversations) return;
+    const params = new URLSearchParams(location.search);
+    const conversationIdFromUrl = params.get('conversation');
+    const conversationIdFromState =
+      location.state?.conversationId ||
+      location.state?.serviceRequestId ||
+      location.state?.serviceRequest?.id ||
+      location.state?.bookingId;
+
+    const targetConversationId = conversationIdFromUrl || conversationIdFromState;
+
+    if (
+      targetConversationId &&
+      conversations.some((conversation) => conversation.id === targetConversationId)
+    ) {
+      setSelectedConversationId(targetConversationId);
+    } else if (!isMobileView && !selectedConversationId && conversations.length > 0) {
+      setSelectedConversationId(conversations[0].id);
+    }
+  }, [
+    location.search,
+    location.state,
+    conversations,
+    loadingConversations,
+    isMobileView,
+    selectedConversationId,
+  ]);
+
+  useEffect(() => {
+    if (!selectedConversationId) {
+      setMessages([]);
+      return;
+    }
+    setIsBookingPanelExpanded(false);
+    fetchMessages(selectedConversationId);
+  }, [selectedConversationId, fetchMessages]);
+
+  const selectedConversation = useMemo(
+    () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
+    [conversations, selectedConversationId]
+  );
 
   const handleSelectConversation = (conversationId) => {
     setSelectedConversationId(conversationId);
@@ -336,194 +249,207 @@ const ChatCommunication = () => {
     navigate('/chat-communication');
   };
 
-  const handleSendMessage = (messageData) => {
-    const newMessage = {
-      id: `msg_${Date.now()}`,
-      senderId: currentUser?.id,
-      senderName: currentUser?.name,
-      senderAvatar: currentUser?.avatar,
-      content: messageData?.content,
-      timestamp: messageData?.timestamp,
-      type: messageData?.type,
-      deliveryStatus: 'sent'
-    };
-
-    setMessages(prev => [...prev, newMessage]);
-
-    // Simulate typing indicator
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      // Simulate auto-response for demo
-      if (selectedConversation) {
-        const autoResponse = {
-          id: `msg_${Date.now() + 1}`,
-          senderId: selectedConversation?.participant?.id,
-          senderName: selectedConversation?.participant?.name,
-          senderAvatar: selectedConversation?.participant?.avatar,
-          content: "Thanks for the update! I'll respond shortly.",
-          timestamp: new Date(),
-          type: 'text',
-          deliveryStatus: 'delivered'
-        };
-        setMessages(prev => [...prev, autoResponse]);
-      }
-    }, 2000);
-  };
-
-  const handleSendImage = (file) => {
-    // In a real app, you would upload the file and get a URL
-    const imageUrl = URL.createObjectURL(file);
-    
-    const newMessage = {
-      id: `msg_${Date.now()}`,
-      senderId: currentUser?.id,
-      senderName: currentUser?.name,
-      senderAvatar: currentUser?.avatar,
-      content: '',
-      timestamp: new Date(),
-      type: 'image',
-      imageUrl: imageUrl,
-      caption: '',
-      deliveryStatus: 'sent'
-    };
-
-    setMessages(prev => [...prev, newMessage]);
-  };
-
-  const handleSendLocation = (locationData) => {
-    const newMessage = {
-      id: `msg_${Date.now()}`,
-      senderId: currentUser?.id,
-      senderName: currentUser?.name,
-      senderAvatar: currentUser?.avatar,
-      content: '',
-      timestamp: locationData?.timestamp,
-      type: 'location',
-      locationName: 'Current Location',
-      deliveryStatus: 'sent'
-    };
-
-    setMessages(prev => [...prev, newMessage]);
-  };
-
-  const handleProfileClick = () => {
-    navigate('/profile-management');
-  };
-
-  const handleBookingDetailsClick = () => {
-    navigate('/booking-management');
-  };
-
-  // Mobile view - show conversation list or selected conversation
-  if (isMobileView) {
-    if (!selectedConversationId) {
-      return (
-          <div className="min-h-screen bg-background">
-            <Header />
-            <div className="h-screen pt-16 pb-14">
-              <ConversationList
-                conversations={conversations}
-                selectedConversationId={selectedConversationId}
-                onSelectConversation={handleSelectConversation}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-              />
-            </div>
-          </div>
-        
+  const appendMessageToConversation = useCallback(
+    (conversationId, message) => {
+      setMessages((prev) => [...prev, message]);
+      setConversations((prev) =>
+        prev.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                lastMessage: {
+                  id: message.id,
+                  senderId: message.senderId,
+                  senderName: message.senderName,
+                  content: message.content,
+                  type: message.type,
+                  metadata: message.metadata,
+                  timestamp: message.timestamp,
+                  deliveryStatus: message.deliveryStatus,
+                },
+                updatedAt: message.timestamp,
+                unreadCount: 0,
+              }
+            : conversation
+        )
       );
+    },
+    []
+  );
+
+  const sendMessage = useCallback(
+    async ({ type, content, metadata }) => {
+      if (!selectedConversationId) return;
+      setSendingMessage(true);
+      setMessageError(null);
+      try {
+        const { data } = await axios.post(`/api/service-requests/${selectedConversationId}/messages`, {
+          type,
+          content,
+          metadata,
+        });
+        const mapped = mapMessageFromApi(data?.message);
+        if (mapped) {
+          appendMessageToConversation(selectedConversationId, mapped);
+        }
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        setMessageError(error?.response?.data?.error || 'Unable to send message.');
+      } finally {
+        setSendingMessage(false);
+      }
+    },
+    [appendMessageToConversation, mapMessageFromApi, selectedConversationId]
+  );
+
+  const handleSendMessage = async (messageData) => {
+    if (!selectedConversationId || sendingMessage) return;
+    await sendMessage({
+      type: messageData?.type || 'text',
+      content: messageData?.content || '',
+      metadata: messageData?.metadata || {},
+    });
+  };
+
+  const handleSendImage = async (file) => {
+    if (!selectedConversationId || !file || sendingMessage) return;
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Failed to read file.'));
+        reader.readAsDataURL(file);
+      });
+
+      await sendMessage({
+        type: 'image',
+        content: dataUrl,
+        metadata: {
+          imageUrl: dataUrl,
+          fileName: file.name,
+          mimeType: file.type,
+          size: file.size,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to share image:', error);
+      setMessageError('Unable to share the selected image.');
     }
+  };
 
-    return (
-        <div className="min-h-screen bg-background">
-          <div className="h-screen flex flex-col">
-            <ConversationHeader
-              participant={selectedConversation?.participant}
-              booking={selectedConversation?.booking}
-              onBackClick={handleBackToList}
-              onBookingDetailsClick={handleBookingDetailsClick}
-              onProfileClick={handleProfileClick}
-            />
-            
-            <BookingContextPanel
-              booking={selectedConversation?.booking}
-              isExpanded={isBookingPanelExpanded}
-              onToggle={() => setIsBookingPanelExpanded(!isBookingPanelExpanded)}
-            />
-            
-            <MessageList
-              messages={messages}
-              currentUserId={currentUser?.id}
-              isLoading={false}
-              onLoadMore={() => {}}
-            />
-            
-            <MessageInput
-              onSendMessage={handleSendMessage}
-              onSendImage={handleSendImage}
-              onSendLocation={handleSendLocation}
-              isTyping={isTyping}
-            />
-          </div>
-        </div>
-    );
-  }
+  const handleSendLocation = async ({ latitude, longitude }) => {
+    if (!selectedConversationId || latitude == null || longitude == null || sendingMessage) return;
+    const label = `${Number(latitude).toFixed(4)}, ${Number(longitude).toFixed(4)}`;
+    await sendMessage({
+      type: 'location',
+      content: '',
+      metadata: {
+        latitude,
+        longitude,
+        label,
+        mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}`,
+      },
+    });
+  };
 
-  // Desktop view - show both panels
+  const enrichedSelectedConversation = useMemo(() => {
+    if (!selectedConversation) return null;
+    const booking = selectedConversation.booking
+      ? {
+          ...selectedConversation.booking,
+          formattedBudget: formatCurrencyINR(selectedConversation.booking.budget),
+        }
+      : null;
+
+    return {
+      ...selectedConversation,
+      booking,
+    };
+  }, [selectedConversation]);
+
   return (
-      <div className="min-h-screen bg-background">
-        <Header onToggleSidebar={() => {}} />
-        <div className="h-screen pt-16 flex">
-          {/* Conversations Sidebar */}
-          <div className="w-80 border-r border-border flex-shrink-0">
-            <ConversationList
-              conversations={conversations}
-              selectedConversationId={selectedConversationId}
-              onSelectConversation={handleSelectConversation}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-            />
-          </div>
+    <div className="min-h-screen bg-background">
+      <Header user={currentUser} />
+      <main className="pt-16 h-[calc(100vh-4rem)] flex">
+        {/* Conversations Sidebar */}
+        <div
+          className={`border-r border-border ${
+            selectedConversationId && isMobileView ? 'hidden md:flex' : 'flex'
+          } w-full md:w-80 flex-col`}
+        >
+          {conversationError ? (
+            <div className="p-4 text-sm text-error bg-error/10 border-b border-error/20">
+              {conversationError}
+            </div>
+          ) : null}
+          <ConversationList
+            conversations={conversations}
+            selectedConversationId={selectedConversationId}
+            onSelectConversation={handleSelectConversation}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            currentUserId={currentUserId}
+            loading={loadingConversations}
+          />
+        </div>
 
-          {/* Chat Area */}
-          <div className="flex-1 flex flex-col">
-            {selectedConversation ? (
-              <>
-                <ConversationHeader
-                  participant={selectedConversation?.participant}
-                  booking={selectedConversation?.booking}
-                  onBackClick={handleBackToList}
-                  onBookingDetailsClick={handleBookingDetailsClick}
-                  onProfileClick={handleProfileClick}
-                />
-                
-                <BookingContextPanel
-                  booking={selectedConversation?.booking}
-                  isExpanded={isBookingPanelExpanded}
-                  onToggle={() => setIsBookingPanelExpanded(!isBookingPanelExpanded)}
-                />
-                
-                <MessageList
-                  messages={messages}
-                  currentUserId={currentUser?.id}
-                  isLoading={false}
-                  onLoadMore={() => {}}
-                />
-                
-                <MessageInput
-                  onSendMessage={handleSendMessage}
-                  onSendImage={handleSendImage}
-                  onSendLocation={handleSendLocation}
-                  isTyping={isTyping}
-                />
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center bg-muted/30">
+        {/* Conversation Area */}
+        <div className="flex-1 flex flex-col bg-muted/30">
+          {enrichedSelectedConversation ? (
+            <>
+              <ConversationHeader
+                participant={enrichedSelectedConversation.participant}
+                booking={enrichedSelectedConversation.booking}
+                onBackClick={handleBackToList}
+                onBookingDetailsClick={() =>
+                  setIsBookingPanelExpanded((prev) => !prev)
+                }
+                onProfileClick={() => {}}
+              />
+
+              <div className="flex flex-1 overflow-hidden">
+                <div className="flex-1 flex flex-col">
+                  {messageError ? (
+                    <div className="px-4 py-2 text-xs text-error bg-error/10 border-b border-error/20">
+                      {messageError}
+                    </div>
+                  ) : null}
+                  <MessageList
+                    messages={messages}
+                    currentUserId={currentUserId}
+                    isLoading={loadingMessages}
+                    hasMore={false}
+                  />
+                  <MessageInput
+                    onSendMessage={handleSendMessage}
+                    onSendImage={handleSendImage}
+                    onSendLocation={handleSendLocation}
+                    isTyping={false}
+                    disabled={sendingMessage}
+                  />
+                </div>
+
+                <div className="hidden xl:flex xl:w-80 border-l border-border flex-col">
+                  <BookingContextPanel
+                    booking={enrichedSelectedConversation.booking}
+                    isExpanded={isBookingPanelExpanded}
+                    onToggle={() => setIsBookingPanelExpanded((prev) => !prev)}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-8">
+              {loadingConversations ? (
+                <div className="text-center space-y-3">
+                  <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <p className="text-sm text-text-secondary">Loading conversations...</p>
+                </div>
+              ) : (
                 <div className="text-center max-w-sm">
-                  <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg
-                      className="w-10 h-10 text-primary"
+                      className="w-8 h-8 text-text-secondary"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -536,18 +462,19 @@ const ChatCommunication = () => {
                       />
                     </svg>
                   </div>
-                  <h3 className="text-xl font-semibold text-text-primary mb-3">
+                  <h3 className="text-lg font-medium text-text-primary mb-2">
                     Select a conversation
                   </h3>
-                  <p className="text-text-secondary">
-                    Choose a conversation from the sidebar to start chatting with technicians or users.
+                  <p className="text-text-secondary text-sm">
+                    Choose a booking or start a conversation with your technician to share updates.
                   </p>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
+      </main>
+    </div>
   );
 };
 

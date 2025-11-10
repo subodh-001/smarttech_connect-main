@@ -1,5 +1,30 @@
 import mongoose from 'mongoose';
 
+const MessageSchema = new mongoose.Schema(
+  {
+    senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    senderRole: {
+      type: String,
+      enum: ['user', 'technician', 'admin'],
+      required: true,
+    },
+    contentType: {
+      type: String,
+      enum: ['text', 'image', 'location', 'booking_update'],
+      default: 'text',
+    },
+    content: { type: String, default: '' },
+    metadata: { type: mongoose.Schema.Types.Mixed },
+    deliveryStatus: {
+      type: String,
+      enum: ['sent', 'delivered', 'read'],
+      default: 'sent',
+    },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
 const ServiceRequestSchema = new mongoose.Schema(
   {
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -24,6 +49,8 @@ const ServiceRequestSchema = new mongoose.Schema(
     budgetMax: Number,
     finalCost: Number,
     reviewRating: Number,
+    reviewComment: { type: String },
+    cancellationReason: { type: String },
     locationAddress: { type: String, required: true },
     locationCoordinates: {
       lat: Number,
@@ -31,6 +58,7 @@ const ServiceRequestSchema = new mongoose.Schema(
     },
     images: [String],
     requirements: mongoose.Schema.Types.Mixed,
+    messages: { type: [MessageSchema], default: [] },
   },
   { timestamps: true }
 );
