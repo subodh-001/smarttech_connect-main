@@ -227,9 +227,80 @@ const LiveTracking = () => {
   const [routeSummary, setRouteSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [chatError, setChatError] = useState(null);
+  const [isSendingChat, setIsSendingChat] = useState(false);
 
   const resolvedRequestId =
     routerLocation.state?.serviceRequestId || searchParams.get('id');
+
+  const currentUserId = useMemo(() => {
+    return (
+      user?.id ||
+      user?._id ||
+      user?.user_id ||
+      user?.sub ||
+      null
+    );
+  }, [user]);
+
+  const normalizeChatMessage = useCallback(
+    (message) => {
+      if (!message) return null;
+      const sender = message.sender || {};
+      const metadata = message.metadata || {};
+      const senderId = sender.id || message.senderId || null;
+      const type = message.type || message.contentType || 'text';
+      const deliveryStatus = message.deliveryStatus || 'sent';
+
+      let displayContent = message.content || '';
+      if (type === 'location') {
+        displayContent =
+          metadata.label || metadata.address || metadata.name || 'Shared location';
+      }
+      if (type === 'image') {
+        displayContent = metadata.caption || 'Shared image';
+      }
+
+      return {
+        id: message.id || message._id || Date.now().toString(),
+        sender: senderId && senderId === currentUserId ? 'user' : 'technician',
+        senderId,
+        type,
+        content: displayContent,
+        metadata,
+        timestamp: message.createdAt || message.timestamp || new Date().toISOString(),
+        read: deliveryStatus === 'read',
+        deliveryStatus,
+      };
+    },
+    [currentUserId],
+  );
+
+  const fetchChatMessages = useCallback(
+    async ({ silent = false, requestId } = {}) => {
+      const targetId = requestId || serviceRequest?.id;
+      if (!targetId) return;
+      if (!silent) {
+        setChatError(null);
+      }
+      try {
+        const { data } = await axios.get(
+          `/api/service-requests/${targetId}/messages`,
+        );
+        const rawMessages = Array.isArray(data?.messages) ? data.messages : [];
+        const mapped = rawMessages
+          .map(normalizeChatMessage)
+          .filter(Boolean);
+        setChatMessages(mapped);
+      } catch (err) {
+        console.error('Failed to load chat messages:', err);
+        if (!silent) {
+          setChatError(err?.response?.data?.error || 'Unable to load messages right now.');
+        }
+      }
+    },
+    [serviceRequest?.id, normalizeChatMessage],
+  );
 
   const fetchLiveData = useCallback(async () => {
     setLoading(true);
@@ -260,11 +331,13 @@ const LiveTracking = () => {
         setRouteSummary(null);
         setEstimatedArrival(null);
         setNotifications([]);
+        setChatMessages([]);
         setError('No service requests to track yet.');
         return;
       }
 
       setServiceRequest(requestDoc);
+      setChatMessages([]);
       setPricing(buildPricingSummary(requestDoc));
 
       let technicianProfile = null;
@@ -297,14 +370,14 @@ const LiveTracking = () => {
       setCurrentPhase(derivedPhase);
 
       setNotifications(buildNotifications(requestDoc, info));
-      setChatMessages([]);
+      await fetchChatMessages({ silent: true, requestId: requestDoc.id });
     } catch (err) {
       console.error('Failed to load live tracking data:', err);
       setError(err?.response?.data?.error || 'Unable to load live tracking data right now.');
     } finally {
       setLoading(false);
     }
-  }, [resolvedRequestId]);
+  }, [resolvedRequestId, fetchChatMessages]);
 
   useEffect(() => {
     fetchLiveData();
@@ -356,6 +429,15 @@ const LiveTracking = () => {
     return () => clearInterval(interval);
   }, [estimatedArrival]);
 
+  useEffect(() => {
+    if (!serviceRequest?.id) return;
+    fetchChatMessages();
+    const interval = setInterval(() => {
+      fetchChatMessages({ silent: true });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [serviceRequest?.id, fetchChatMessages]);
+
   const technicianStatusLabel = useMemo(() => {
     switch (serviceRequest?.status) {
       case 'pending':
@@ -398,7 +480,8 @@ const LiveTracking = () => {
 
   const handleChat = useCallback(() => {
     setIsChatOpen(true);
-  }, []);
+    fetchChatMessages();
+  }, [fetchChatMessages]);
 
   const handleEmergencyContact = useCallback(() => {
     const notification = {
@@ -449,16 +532,34 @@ const LiveTracking = () => {
     navigate('/booking-management', { state: { highlightId: serviceRequest.id } });
   }, [navigate, serviceRequest]);
 
-  const handleSendMessage = useCallback((message) => {
-    const newMessage = {
-      id: Date.now(),
-      sender: 'user',
-      content: message,
-      timestamp: new Date(),
-      read: true,
-    };
-    setChatMessages((prev) => [...prev, newMessage]);
-  }, []);
+  const handleSendMessage = useCallback(
+    async (message) => {
+      if (!serviceRequest?.id || !message?.trim()) return;
+      setIsSendingChat(true);
+      setChatError(null);
+      try {
+        const { data } = await axios.post(
+          `/api/service-requests/${serviceRequest.id}/messages`,
+          {
+            type: 'text',
+            content: message.trim(),
+          },
+        );
+        const mapped = normalizeChatMessage(data?.message);
+        if (mapped) {
+          setChatMessages((prev) => [...prev, mapped]);
+        } else {
+          fetchChatMessages({ silent: true });
+        }
+      } catch (err) {
+        console.error('Failed to send message:', err);
+        setChatError(err?.response?.data?.error || 'Unable to send message right now.');
+      } finally {
+        setIsSendingChat(false);
+      }
+    },
+    [serviceRequest?.id, normalizeChatMessage, fetchChatMessages],
+  );
 
   const handleDismissNotification = useCallback((notificationId) => {
     setNotifications((prev) =>
@@ -473,11 +574,17 @@ const LiveTracking = () => {
   const handleNotificationAction = useCallback(
     (notification) => {
       if (notification?.actionLabel === 'View profile' && technicianInfo?.name) {
-        setIsChatOpen(true);
+        handleChat();
       }
       handleDismissNotification(notification.id);
     },
-    [handleDismissNotification, technicianInfo],
+    [handleDismissNotification, technicianInfo, handleChat],
+  );
+
+  const chatUnreadCount = useMemo(
+    () =>
+      chatMessages.filter((msg) => msg.sender !== 'user' && !msg.read).length,
+    [chatMessages],
   );
 
   if (loading) {
@@ -487,6 +594,7 @@ const LiveTracking = () => {
           user={user}
           location={currentLocationLabel}
           activeService={serviceRequest}
+          messageBadgeCount={chatUnreadCount}
         />
         <main className="pt-24 flex items-center justify-center">
           <div className="text-center space-y-4">
@@ -501,7 +609,7 @@ const LiveTracking = () => {
   if (!serviceRequest) {
     return (
       <div className="min-h-screen bg-background">
-        <Header user={user} location={currentLocationLabel} />
+        <Header user={user} location={currentLocationLabel} messageBadgeCount={chatUnreadCount} />
         <main className="pt-24">
           <div className="max-w-xl mx-auto text-center space-y-4">
             <h1 className="text-2xl font-semibold text-foreground">
@@ -525,6 +633,7 @@ const LiveTracking = () => {
         user={user}
         location={currentLocationLabel}
         activeService={serviceRequest}
+        messageBadgeCount={chatUnreadCount}
       />
       <main className="pt-16">
         {error ? (
@@ -556,7 +665,7 @@ const LiveTracking = () => {
                 onClick={handleChat}
               >
                 Chat
-                {chatMessages.some((msg) => !msg.read && msg.sender !== 'user') && (
+                {chatUnreadCount > 0 && (
                   <div className="ml-2 w-2 h-2 bg-red-500 rounded-full"></div>
                 )}
               </Button>
@@ -636,11 +745,20 @@ const LiveTracking = () => {
           </Button>
         </div>
 
+        {chatError ? (
+          <div className="mx-auto mb-3 max-w-md rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+            {chatError}
+          </div>
+        ) : null}
+
         <ChatWidget
           isOpen={isChatOpen}
+          onOpen={handleChat}
           onClose={() => setIsChatOpen(false)}
-          onSend={handleSendMessage}
+          onSendMessage={handleSendMessage}
+          technician={technicianInfo}
           messages={chatMessages}
+          isSending={isSendingChat}
         />
       </main>
     </div>

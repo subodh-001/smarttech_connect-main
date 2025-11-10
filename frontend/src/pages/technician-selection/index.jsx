@@ -163,6 +163,71 @@ const TechnicianSelection = () => {
   const filtersRef = useRef(activeFilters);
   const [profileTechnician, setProfileTechnician] = useState(null);
   const [bookingState, setBookingState] = useState({ submitting: false, technicianId: null });
+  const [bootstrapAttempted, setBootstrapAttempted] = useState(Boolean(initialRequest));
+
+  const fetchTechnicians = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!serviceRequest) {
+        if (!silent) {
+          setTechnicians([]);
+          setFilteredTechnicians([]);
+        }
+        return;
+      }
+
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+
+      try {
+        const params = {
+          category: serviceRequest.category,
+          radius: DEFAULT_RADIUS_KM,
+        };
+
+        if (serviceRequest.locationCoordinates) {
+          params.lat = serviceRequest.locationCoordinates.lat;
+          params.lng = serviceRequest.locationCoordinates.lng;
+        }
+
+        const { data } = await axios.get('/api/technicians/available', { params });
+        const surgeMultiplier =
+          serviceRequest?.requirements?.surgeMultiplier ??
+          (serviceRequest?.priority === 'urgent'
+            ? 1.2
+            : serviceRequest?.priority === 'high'
+            ? 1.1
+            : 1);
+
+        const fetchedTechnicians = (data?.technicians || []).map((tech) => {
+          const baseRate = Number(tech.hourlyRate || 0);
+          const priceWithSurge = surgeMultiplier !== 1 ? Math.round(baseRate * surgeMultiplier) : baseRate;
+          return {
+            ...tech,
+            priceWithSurge,
+            surgeMultiplier,
+          };
+        });
+
+        setTechnicians(fetchedTechnicians);
+        setMatchingSummary(data?.summary || null);
+        setFilteredTechnicians(filterTechnicians(fetchedTechnicians, filtersRef.current));
+      } catch (err) {
+        console.error('Failed to load technicians:', err);
+        if (!silent) {
+          setError('Unable to load technicians right now. Please try again later.');
+        }
+        setTechnicians([]);
+        setFilteredTechnicians([]);
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [serviceRequest],
+  );
 
   useEffect(() => {
     filtersRef.current = activeFilters;
@@ -188,62 +253,45 @@ const TechnicianSelection = () => {
   }, [initialState.technicians, serviceRequest]);
 
   useEffect(() => {
-    if (!serviceRequest) {
-      navigate('/service-request-creation', { replace: true });
-    }
-  }, [serviceRequest, navigate]);
+    if (serviceRequest || bootstrapAttempted) return;
+    let cancelled = false;
 
-  const userLocation = useMemo(() => {
-    const coords = serviceRequest?.locationCoordinates || DEFAULT_COORDINATES;
-    return {
-      lat: coords.lat ?? DEFAULT_COORDINATES.lat,
-      lng: coords.lng ?? DEFAULT_COORDINATES.lng,
-      address: serviceRequest?.locationAddress || 'Bangalore, India',
-    };
-  }, [serviceRequest]);
+    const bootstrap = async () => {
+      setLoading(true);
+      try {
+        const { data } = await axios.get('/api/service-requests');
+        const requests = Array.isArray(data) ? data : [];
+        const candidate =
+          requests.find((item) => ['pending', 'confirmed'].includes(item.status)) ||
+          requests[0] ||
+          null;
 
-  const fetchTechnicians = useCallback(async () => {
-    if (!serviceRequest) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const params = {
-        category: serviceRequest.category,
-        radius: DEFAULT_RADIUS_KM,
-      };
-      if (serviceRequest.locationCoordinates) {
-        params.lat = serviceRequest.locationCoordinates.lat;
-        params.lng = serviceRequest.locationCoordinates.lng;
+        if (!cancelled) {
+          if (candidate) {
+            setServiceRequest(candidate);
+          } else {
+            setError('Create a service request to see matching technicians in your area.');
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load service requests:', err);
+          setError('We could not load your service requests. Create a new one to begin.');
+        }
+      } finally {
+        if (!cancelled) {
+          setBootstrapAttempted(true);
+          setLoading(false);
+        }
       }
-      const { data } = await axios.get('/api/technicians/available', { params });
-      const surgeMultiplier =
-        serviceRequest?.requirements?.surgeMultiplier ??
-        (serviceRequest?.priority === 'urgent'
-          ? 1.2
-          : serviceRequest?.priority === 'high'
-          ? 1.1
-          : 1);
-      const fetchedTechnicians = (data?.technicians || []).map((tech) => {
-        const baseRate = Number(tech.hourlyRate || 0);
-        const priceWithSurge = surgeMultiplier !== 1 ? Math.round(baseRate * surgeMultiplier) : baseRate;
-        return {
-          ...tech,
-          priceWithSurge,
-          surgeMultiplier,
-        };
-      });
-      setTechnicians(fetchedTechnicians);
-      setMatchingSummary(data?.summary || null);
-      setFilteredTechnicians(filterTechnicians(fetchedTechnicians, filtersRef.current));
-    } catch (err) {
-      console.error('Failed to load technicians:', err);
-      setError('Unable to load technicians right now. Please try again later.');
-      setTechnicians([]);
-      setFilteredTechnicians([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [serviceRequest]);
+    };
+
+    bootstrap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [serviceRequest, bootstrapAttempted]);
 
   useEffect(() => {
     fetchTechnicians();
@@ -333,6 +381,50 @@ const TechnicianSelection = () => {
     }
     return `${filteredTechnicians.length} available`;
   }, [matchingSummary, filteredTechnicians]);
+
+  if (!serviceRequest && !bootstrapAttempted) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header user={user} location="Search Technicians" activeService={null} />
+        <main className="flex min-h-[70vh] items-center justify-center px-4">
+          <div className="flex items-center space-x-3 text-muted-foreground">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary"></div>
+            <p className="text-sm">Loading your latest service request…</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!serviceRequest && bootstrapAttempted) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header user={user} location="Search Technicians" activeService={null} />
+        <main className="pt-24 pb-12">
+          <div className="mx-auto max-w-3xl rounded-2xl border border-border bg-card px-6 py-10 text-center shadow-subtle">
+            <h1 className="text-3xl font-semibold text-foreground">Start by creating a service request</h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Tell us what help you need and we’ll automatically shortlist certified technicians nearby.
+            </p>
+            {error ? (
+              <p className="mt-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+                {error}
+              </p>
+            ) : null}
+            <Button
+              className="mt-6"
+              size="lg"
+              iconName="Plus"
+              iconPosition="left"
+              onClick={() => navigate('/service-request-creation')}
+            >
+              Create Service Request
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

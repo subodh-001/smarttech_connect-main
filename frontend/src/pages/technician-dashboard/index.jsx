@@ -518,13 +518,15 @@ const TechnicianDashboard = () => {
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
               className={`flex items-center space-x-2 rounded-full px-4 py-2 text-sm font-medium transition-smooth ${
-                activeTab === tab.key ? 'bg-primary text-primary-foreground shadow-subtle' : 'bg-muted text-text-secondary hover:text-text-primary'
+                activeTab === tab.key
+                  ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
               }`}
             >
               <Icon name={tab.icon} size={16} />
               <span>{tab.label}</span>
               {tab.badge ? (
-                <span className="rounded-full bg-primary-foreground/20 px-2 text-xs font-semibold text-primary-foreground">
+                <span className="rounded-full bg-white/20 px-2 text-xs font-semibold text-white">
                   {tab.badge}
                 </span>
               ) : null}

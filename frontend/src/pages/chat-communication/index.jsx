@@ -88,109 +88,110 @@ const ChatCommunication = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const mapMessageFromApi = useCallback(
-    (message) => {
-      if (!message) return null;
-      const metadata = message.metadata || {};
-      const base = {
-        id: message.id,
-        senderId: message.sender?.id,
-        senderName: message.sender?.name,
-        senderAvatar: message.sender?.avatar || fallbackAvatar(message.sender?.name),
-        type: message.type || 'text',
-        content: message.content || '',
-        metadata,
-        timestamp: message.createdAt,
-        deliveryStatus: message.deliveryStatus || 'sent',
-      };
+  const mapMessageFromApi = useCallback((message) => {
+    if (!message) return null;
+    const sender = message.sender || {};
+    const metadata = message.metadata || {};
+    return {
+      id: message.id,
+      senderId: sender.id,
+      senderName: sender.name,
+      senderAvatar: sender.avatar || fallbackAvatar(sender.name),
+      type: message.type || 'text',
+      content: message.content || '',
+      metadata,
+      imageUrl: metadata.imageUrl,
+      caption: metadata.caption,
+      locationName:
+        metadata.label || metadata.address || metadata.locationName || metadata.name,
+      timestamp: message.createdAt || message.timestamp,
+      deliveryStatus: message.deliveryStatus || 'delivered',
+    };
+  }, []);
 
-      if (base.type === 'image') {
-        base.imageUrl = metadata.imageUrl || base.content;
-        base.caption = metadata.caption || '';
+  const loadConversations = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setLoadingConversations(true);
+        setConversationError(null);
       }
-
-      if (base.type === 'location') {
-        const { latitude, longitude } = metadata;
-        const label =
-          metadata.label ||
-          metadata.address ||
-          (latitude != null && longitude != null
-            ? `${Number(latitude).toFixed(4)}, ${Number(longitude).toFixed(4)}`
-            : 'Shared location');
-        base.locationName = label;
+      try {
+        const { data } = await axios.get('/api/service-requests/conversations');
+        setConversations(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Failed to load conversations:', error);
+        if (!silent) {
+          setConversationError(
+            error?.response?.data?.error || 'Unable to load conversations right now.'
+          );
+          setConversations([]);
+        }
+      } finally {
+        if (!silent) setLoadingConversations(false);
       }
-
-      return base;
     },
     []
   );
-
-  const loadConversations = useCallback(async () => {
-    setLoadingConversations(true);
-    setConversationError(null);
-    try {
-      const { data } = await axios.get('/api/service-requests/conversations');
-      setConversations(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-      setConversationError(
-        error?.response?.data?.error || 'Unable to load conversations right now.'
-      );
-      setConversations([]);
-    } finally {
-      setLoadingConversations(false);
-    }
-  }, []);
 
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadConversations(true);
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [loadConversations]);
+
   const fetchMessages = useCallback(
-    async (conversationId) => {
+    async (conversationId, { silent = false } = {}) => {
       if (!conversationId) return;
-      setLoadingMessages(true);
-      setMessageError(null);
+      if (!silent) {
+        setLoadingMessages(true);
+        setMessageError(null);
+      }
       try {
         const { data } = await axios.get(`/api/service-requests/${conversationId}/messages`);
-        const mappedMessages = Array.isArray(data?.messages)
-          ? data.messages.map(mapMessageFromApi)
-          : [];
+        const rawMessages = Array.isArray(data?.messages) ? data.messages : [];
+        const mappedMessages = rawMessages.map(mapMessageFromApi).filter(Boolean);
+
         setMessages(mappedMessages);
 
         const latestMessage = mappedMessages.length
           ? mappedMessages[mappedMessages.length - 1]
           : null;
 
-        setConversations((prev) =>
-          prev.map((conversation) =>
-            conversation.id === conversationId
-              ? {
-                  ...conversation,
-                  unreadCount: 0,
-                  lastMessage:
-                    latestMessage
-                      ? {
-                          id: latestMessage.id,
-                          senderId: latestMessage.senderId,
-                          senderName: latestMessage.senderName,
-                          content: latestMessage.content,
-                          type: latestMessage.type,
-                          metadata: latestMessage.metadata,
-                          timestamp: latestMessage.timestamp,
-                          deliveryStatus: latestMessage.deliveryStatus,
-                        }
-                      : conversation.lastMessage,
-                }
-              : conversation
-          )
-        );
+        if (latestMessage) {
+          setConversations((prev) =>
+            prev.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    lastMessage: {
+                      id: latestMessage.id,
+                      senderId: latestMessage.senderId,
+                      senderName: latestMessage.senderName,
+                      content: latestMessage.content,
+                      type: latestMessage.type,
+                      metadata: latestMessage.metadata,
+                      timestamp: latestMessage.timestamp,
+                      deliveryStatus: latestMessage.deliveryStatus,
+                    },
+                    unreadCount: 0,
+                  }
+                : conversation
+            )
+          );
+        }
       } catch (error) {
         console.error('Failed to load messages:', error);
-        setMessageError(error?.response?.data?.error || 'Unable to load messages right now.');
-        setMessages([]);
+        if (!silent) {
+          setMessageError(error?.response?.data?.error || 'Unable to load messages right now.');
+          setMessages([]);
+        }
       } finally {
-        setLoadingMessages(false);
+        if (!silent) setLoadingMessages(false);
       }
     },
     [mapMessageFromApi]
@@ -234,10 +235,13 @@ const ChatCommunication = () => {
     fetchMessages(selectedConversationId);
   }, [selectedConversationId, fetchMessages]);
 
-  const selectedConversation = useMemo(
-    () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
-    [conversations, selectedConversationId]
-  );
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    const interval = setInterval(() => {
+      fetchMessages(selectedConversationId, { silent: true });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [selectedConversationId, fetchMessages]);
 
   const handleSelectConversation = (conversationId) => {
     setSelectedConversationId(conversationId);
@@ -249,45 +253,42 @@ const ChatCommunication = () => {
     navigate('/chat-communication');
   };
 
-  const appendMessageToConversation = useCallback(
-    (conversationId, message) => {
-      setMessages((prev) => [...prev, message]);
-      setConversations((prev) =>
-        prev.map((conversation) =>
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                lastMessage: {
-                  id: message.id,
-                  senderId: message.senderId,
-                  senderName: message.senderName,
-                  content: message.content,
-                  type: message.type,
-                  metadata: message.metadata,
-                  timestamp: message.timestamp,
-                  deliveryStatus: message.deliveryStatus,
-                },
-                updatedAt: message.timestamp,
-                unreadCount: 0,
-              }
-            : conversation
-        )
-      );
-    },
-    []
-  );
+  const appendMessageToConversation = useCallback((conversationId, message) => {
+    setMessages((prev) => [...prev, message]);
+    setConversations((prev) =>
+      prev.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              lastMessage: {
+                id: message.id,
+                senderId: message.senderId,
+                senderName: message.senderName,
+                content: message.content,
+                type: message.type,
+                metadata: message.metadata,
+                timestamp: message.timestamp,
+                deliveryStatus: message.deliveryStatus,
+              },
+              updatedAt: message.timestamp,
+              unreadCount: 0,
+            }
+          : conversation
+      )
+    );
+  }, []);
 
   const sendMessage = useCallback(
-    async ({ type, content, metadata }) => {
+    async ({ type = 'text', content = '', metadata = {} }) => {
       if (!selectedConversationId) return;
       setSendingMessage(true);
       setMessageError(null);
       try {
-        const { data } = await axios.post(`/api/service-requests/${selectedConversationId}/messages`, {
-          type,
-          content,
-          metadata,
-        });
+        const payload = { type, content, metadata };
+        const { data } = await axios.post(
+          `/api/service-requests/${selectedConversationId}/messages`,
+          payload
+        );
         const mapped = mapMessageFromApi(data?.message);
         if (mapped) {
           appendMessageToConversation(selectedConversationId, mapped);
@@ -323,7 +324,7 @@ const ChatCommunication = () => {
 
       await sendMessage({
         type: 'image',
-        content: dataUrl,
+        content: '',
         metadata: {
           imageUrl: dataUrl,
           fileName: file.name,
@@ -353,25 +354,30 @@ const ChatCommunication = () => {
   };
 
   const enrichedSelectedConversation = useMemo(() => {
-    if (!selectedConversation) return null;
-    const booking = selectedConversation.booking
+    if (!conversations || conversations.length === 0) return null;
+    const active = conversations.find((conversation) => conversation.id === selectedConversationId);
+    if (!active) return null;
+    const booking = active.booking
       ? {
-          ...selectedConversation.booking,
-          formattedBudget: formatCurrencyINR(selectedConversation.booking.budget),
+          ...active.booking,
+          formattedBudget: formatCurrencyINR(active.booking.budget),
         }
       : null;
-
     return {
-      ...selectedConversation,
+      ...active,
       booking,
     };
-  }, [selectedConversation]);
+  }, [conversations, selectedConversationId]);
+
+  const unreadTotal = useMemo(
+    () => conversations.reduce((sum, conversation) => sum + (conversation.unreadCount || 0), 0),
+    [conversations]
+  );
 
   return (
     <div className="min-h-screen bg-background">
-      <Header user={currentUser} />
+      <Header user={currentUser} messageBadgeCount={unreadTotal} />
       <main className="pt-16 h-[calc(100vh-4rem)] flex">
-        {/* Conversations Sidebar */}
         <div
           className={`border-r border-border ${
             selectedConversationId && isMobileView ? 'hidden md:flex' : 'flex'
@@ -393,7 +399,6 @@ const ChatCommunication = () => {
           />
         </div>
 
-        {/* Conversation Area */}
         <div className="flex-1 flex flex-col bg-muted/30">
           {enrichedSelectedConversation ? (
             <>

@@ -4,7 +4,13 @@ import Icon from '../AppIcon';
 import Button from './Button';
 import { useAuth } from '../../contexts/NewAuthContext';
 
-const Header = ({ user: userProp = null, initialLocation = null, activeService = null }) => {
+const Header = ({
+  user: userProp = null,
+  initialLocation = null,
+  activeService = null,
+  messageBadgeCount = 0,
+  bookingBadgeCount = 0,
+}) => {
   const { user, signOut } = useAuth();
   const [resolvedLocation, setResolvedLocation] = useState(initialLocation);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -12,52 +18,67 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
   const currentLocation = useLocation();
   const navigate = useNavigate();
 
-  // ✅ Role-based navigation
   const pathname = currentLocation?.pathname || '';
   const roleFromPath = (() => {
-    // Only infer technician/admin role from their dashboards
     if (pathname.startsWith('/admin-dashboard')) return 'admin';
     if (pathname.startsWith('/technician-dashboard')) return 'technician';
-    return null; // Do NOT infer technician for '/technician-selection'
+    return null;
   })();
-  const roleRaw = (user?.role || user?.type || userProp?.role || userProp?.type);
+  const roleRaw = user?.role || user?.type || userProp?.role || userProp?.type;
   const role = (roleRaw === 'customer' ? 'user' : roleRaw) || roleFromPath || 'user';
 
+  const technicianTabsBase = '/technician-dashboard';
+  const adminTabsBase = '/admin-dashboard';
+
   let navigationItems = [];
-  
+
   if (role === 'technician') {
-    navigationItems = [];
+    navigationItems = [
+      { label: 'Overview', path: `${technicianTabsBase}?tab=overview`, icon: 'Home' },
+      { label: 'Job Requests', path: `${technicianTabsBase}?tab=jobs`, icon: 'Briefcase', badge: bookingBadgeCount },
+      { label: 'Active Jobs', path: `${technicianTabsBase}?tab=active`, icon: 'Play' },
+      { label: 'Earnings', path: `${technicianTabsBase}?tab=earnings`, icon: 'DollarSign' },
+      { label: 'Schedule', path: `${technicianTabsBase}?tab=schedule`, icon: 'Calendar' },
+      { label: 'Notifications', path: `${technicianTabsBase}?tab=notifications`, icon: 'Bell', badge: messageBadgeCount },
+      { label: 'Messages', path: '/chat-communication', icon: 'MessageCircle' },
+    ];
   } else if (role === 'admin') {
-    navigationItems = [];
+    navigationItems = [
+      { label: 'Overview', path: `${adminTabsBase}?tab=overview`, icon: 'LayoutDashboard' },
+      { label: 'Users', path: `${adminTabsBase}?tab=users`, icon: 'Users' },
+      { label: 'Technicians', path: `${adminTabsBase}?tab=technicians`, icon: 'UserCog' },
+      { label: 'Services', path: `${adminTabsBase}?tab=services`, icon: 'Briefcase' },
+      { label: 'Reports', path: `${adminTabsBase}?tab=reports`, icon: 'BarChart3' },
+      { label: 'Settings', path: `${adminTabsBase}?tab=settings`, icon: 'Settings' },
+    ];
   } else {
     navigationItems = [
       { label: 'Dashboard', path: '/user-dashboard', icon: 'LayoutDashboard' },
-      { label: 'My Bookings', path: '/booking-management', icon: 'CalendarCheck' },
+      { label: 'My Bookings', path: '/booking-management', icon: 'CalendarCheck', badge: bookingBadgeCount },
       { label: 'Request Service', path: '/service-request-creation', icon: 'Plus' },
       { label: 'Find Technicians', path: '/technician-selection', icon: 'Users' },
       { label: 'Track Service', path: '/live-tracking', icon: 'MapPin' },
+      { label: 'Messages', path: '/chat-communication', icon: 'MessageCircle', badge: messageBadgeCount },
     ];
   }
 
   const isActivePath = (path) => {
-    // For dashboard pages with tabs, check both path and query parameters
     if (path.startsWith('/technician-dashboard') || path.startsWith('/admin-dashboard')) {
       const currentTab = new URLSearchParams(currentLocation.search).get('tab') || 'overview';
-      const pathTab = new URL(path, window.location.origin).searchParams.get('tab');
-      const dashboardPath = path.startsWith('/technician-dashboard') ? '/technician-dashboard' : '/admin-dashboard';
-      
-      // If current location is the dashboard
+      const pathUrl = new URL(path, window.location.origin);
+      const pathTab = pathUrl.searchParams.get('tab');
+      const dashboardPath = path.startsWith('/technician-dashboard')
+        ? '/technician-dashboard'
+        : '/admin-dashboard';
+
       if (currentLocation.pathname === dashboardPath) {
-        // For the overview tab (no query param)
         if (path === dashboardPath && !pathTab) {
           return currentTab === 'overview' || !currentTab;
         }
-        // For other tabs with query params
         return pathTab === currentTab;
       }
     }
-    
-    // For other paths, just check the pathname
+
     return currentLocation?.pathname === path;
   };
 
@@ -116,103 +137,114 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
     navigate('/user-login');
   };
 
+  const navLinkClasses = (active) =>
+    `relative flex items-center space-x-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+      active
+        ? 'bg-primary text-white shadow-lg shadow-primary/25'
+        : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+    }`;
 
+  const renderBadge = (badge) =>
+    badge ? (
+      <span className="ml-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/20 px-2 text-[11px] font-semibold text-white">
+        {badge > 99 ? '99+' : badge}
+      </span>
+    ) : null;
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-card border-b border-border trust-shadow">
-      <div className="flex items-center justify-between h-16 px-4 lg:px-6">
-        {/* Logo */}
-        <Link to={role === 'technician' ? '/technician-dashboard' : role === 'admin' ? '/admin-dashboard' : '/user-dashboard'} className="flex items-center space-x-2">
-          <div className="flex items-center justify-center w-8 h-8 bg-primary rounded-lg">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-slate-800 bg-slate-950/95 backdrop-blur-xl shadow-lg shadow-slate-950/30">
+      <div className="flex h-16 items-center justify-between px-4 lg:px-6">
+        <Link
+          to={
+            role === 'technician'
+              ? '/technician-dashboard'
+              : role === 'admin'
+              ? '/admin-dashboard'
+              : '/user-dashboard'
+          }
+          className="flex items-center space-x-2"
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shadow-lg shadow-primary/30">
             <Icon name="Zap" size={20} color="white" />
           </div>
-          <span className="text-xl font-semibold text-foreground">SmartTech Connect</span>
+          <span className="text-xl font-semibold text-white">SmartTech Connect</span>
         </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-1">
-          {navigationItems?.map((item) => (
-            <Link
-              key={item?.path}
-              to={item?.path}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium trust-transition ${
-                isActivePath(item?.path)
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              <Icon name={item?.icon} size={16} />
-              <span className="hidden lg:inline">{item?.label}</span>
-            </Link>
-          ))}
-
-
+        <nav className="hidden md:flex items-center space-x-2">
+          {navigationItems.map((item) => {
+            const active = isActivePath(item.path);
+            return (
+              <Link key={item.path} to={item.path} className={navLinkClasses(active)}>
+                <Icon name={item.icon} size={16} />
+                <span className="hidden lg:inline">{item.label}</span>
+                {renderBadge(item.badge)}
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* Right Section */}
         <div className="flex items-center space-x-4">
-          {/* Location Indicator */}
           {(resolvedLocation || initialLocation) && (
             <button
               onClick={handleLocationClick}
-              className="hidden lg:flex items-center space-x-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground trust-transition"
+              className="hidden lg:flex items-center space-x-2 rounded-md px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
             >
               <Icon name="MapPin" size={16} />
               <span className="max-w-32 truncate">{resolvedLocation || initialLocation}</span>
             </button>
           )}
 
-          {/* Active Service Badge */}
           {activeService && role === 'user' && (
             <Link
               to="/live-tracking"
-              className="hidden lg:flex items-center space-x-2 px-3 py-2 bg-success text-success-foreground rounded-md text-sm font-medium trust-transition hover:bg-success/90"
+              className="hidden lg:flex items-center space-x-2 rounded-md bg-emerald-500 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500/90"
             >
-              <div className="w-2 h-2 bg-success-foreground rounded-full animate-pulse-soft"></div>
+              <div className="h-2 w-2 rounded-full bg-white animate-pulse" />
               <span>Active Service</span>
             </Link>
           )}
 
-          {/* Quick Search */}
           {role === 'user' && (
             <div className="hidden lg:block">
               <div className="relative">
-                <Icon name="Search" size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                <Icon
+                  name="Search"
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+                />
                 <input
                   type="text"
                   placeholder="Search technicians..."
-                  className="w-64 pl-10 pr-4 py-2 bg-muted border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                  className="w-64 rounded-md border border-slate-700 bg-slate-900 px-10 py-2 text-sm text-white placeholder:text-slate-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
             </div>
           )}
 
-          {/* User Profile */}
           {user ? (
-            <div className="relative profile-dropdown">
+            <div className="profile-dropdown relative">
               <button
                 onClick={handleProfileClick}
-                className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted trust-transition"
+                className="flex items-center space-x-2 rounded-md p-2 text-slate-300 hover:bg-slate-800/80 hover:text-white"
               >
-                <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium text-white">
                   {(user?.fullName || user?.name || 'U')?.charAt(0)}
                 </div>
-                <Icon name="ChevronDown" size={16} className="text-muted-foreground" />
+                <Icon name="ChevronDown" size={16} className="text-slate-500" />
               </button>
 
-              {/* Profile Dropdown */}
               {isProfileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-popover border border-border rounded-md trust-shadow-lg z-50">
-                  <div className="p-3 border-b border-border">
-                    <p className="text-sm font-medium text-foreground">{user?.fullName || user?.name || 'User'}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email || 'user@example.com'}</p>
+                <div className="absolute right-0 mt-2 w-60 rounded-lg border border-slate-700 bg-slate-900 shadow-xl shadow-black/50">
+                  <div className="border-b border-slate-800 p-3">
+                    <p className="text-sm font-medium text-white">{user?.fullName || user?.name || 'User'}</p>
+                    <p className="text-xs text-slate-400">{user?.email || 'user@example.com'}</p>
                   </div>
                   <div className="py-1">
                     {role === 'technician' ? (
                       <>
                         <Link
                           to="/profile-management"
-                          className="flex items-center space-x-2 px-3 py-2 text-sm text-foreground hover:bg-muted trust-transition"
+                          className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
                           onClick={() => setIsProfileDropdownOpen(false)}
                         >
                           <Icon name="User" size={16} />
@@ -220,7 +252,7 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
                         </Link>
                         <Link
                           to="/technician-dashboard?tab=schedule"
-                          className="flex items-center space-x-2 px-3 py-2 text-sm text-foreground hover:bg-muted trust-transition"
+                          className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
                           onClick={() => setIsProfileDropdownOpen(false)}
                         >
                           <Icon name="Calendar" size={16} />
@@ -228,18 +260,37 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
                         </Link>
                         <Link
                           to="/help"
-                          className="flex items-center space-x-2 px-3 py-2 text-sm text-foreground hover:bg-muted trust-transition"
+                          className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
                           onClick={() => setIsProfileDropdownOpen(false)}
                         >
                           <Icon name="LifeBuoy" size={16} />
                           <span>Support</span>
                         </Link>
                       </>
+                    ) : role === 'admin' ? (
+                      <>
+                        <Link
+                          to="/admin-dashboard?tab=settings"
+                          className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                          onClick={() => setIsProfileDropdownOpen(false)}
+                        >
+                          <Icon name="Settings" size={16} />
+                          <span>Admin Settings</span>
+                        </Link>
+                        <Link
+                          to="/help"
+                          className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                          onClick={() => setIsProfileDropdownOpen(false)}
+                        >
+                          <Icon name="HelpCircle" size={16} />
+                          <span>Help</span>
+                        </Link>
+                      </>
                     ) : (
                       <>
                         <Link
                           to="/account"
-                          className="flex items-center space-x-2 px-3 py-2 text-sm text-foreground hover:bg-muted trust-transition"
+                          className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
                           onClick={() => setIsProfileDropdownOpen(false)}
                         >
                           <Icon name="User" size={16} />
@@ -247,7 +298,7 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
                         </Link>
                         <Link
                           to="/settings"
-                          className="flex items-center space-x-2 px-3 py-2 text-sm text-foreground hover:bg-muted trust-transition"
+                          className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
                           onClick={() => setIsProfileDropdownOpen(false)}
                         >
                           <Icon name="Settings" size={16} />
@@ -255,7 +306,7 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
                         </Link>
                         <Link
                           to="/help"
-                          className="flex items-center space-x-2 px-3 py-2 text-sm text-foreground hover:bg-muted trust-transition"
+                          className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
                           onClick={() => setIsProfileDropdownOpen(false)}
                         >
                           <Icon name="HelpCircle" size={16} />
@@ -264,10 +315,10 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
                       </>
                     )}
 
-                    <div className="border-t border-border my-1"></div>
+                    <div className="my-1 border-t border-slate-800" />
                     <button
                       onClick={handleLogout}
-                      className="flex items-center space-x-2 w-full px-3 py-2 text-sm text-destructive hover:bg-muted trust-transition"
+                      className="flex w-full items-center space-x-2 px-3 py-2 text-sm text-rose-400 hover:bg-slate-800/80"
                     >
                       <Icon name="LogOut" size={16} />
                       <span>Sign out</span>
@@ -279,7 +330,9 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
           ) : (
             <div className="flex items-center space-x-2">
               <Link to="/user-login">
-                <Button variant="ghost" size="sm">Sign In</Button>
+                <Button variant="outline" size="sm" className="border-slate-700 bg-slate-900 text-white hover:bg-slate-800">
+                  Sign In
+                </Button>
               </Link>
               <Link to="/user-registration">
                 <Button size="sm">Sign Up</Button>
@@ -287,76 +340,76 @@ const Header = ({ user: userProp = null, initialLocation = null, activeService =
             </div>
           )}
 
-          {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2 rounded-md hover:bg-muted trust-transition"
+            className="rounded-md p-2 text-slate-400 hover:bg-slate-800/80 hover:text-white md:hidden"
             aria-label="Toggle menu"
           >
-            <Icon name={isMobileMenuOpen ? "X" : "Menu"} size={20} />
+            <Icon name={isMobileMenuOpen ? 'X' : 'Menu'} size={20} />
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-card border-t border-border">
-          <div className="px-4 py-2 space-y-1">
-            {/* Location for Mobile */}
+        <div className="md:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur-xl">
+          <div className="space-y-1 px-4 py-2">
             {resolvedLocation && (
               <button
                 onClick={handleLocationClick}
-                className="flex items-center space-x-3 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md trust-transition"
+                className="flex w-full items-center space-x-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
               >
                 <Icon name="MapPin" size={16} />
                 <span>{resolvedLocation}</span>
               </button>
             )}
 
-            {/* Navigation Items */}
-            {navigationItems?.map((item) => (
-              <Link
-                key={item?.path}
-                to={item?.path}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium trust-transition ${
-                  isActivePath(item?.path)
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                <Icon name={item?.icon} size={16} />
-                <span>{item?.label}</span>
-              </Link>
-            ))}
+            {navigationItems.map((item) => {
+              const active = isActivePath(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-3 rounded-md px-3 py-2 text-sm font-medium ${
+                    active
+                      ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                      : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                  }`}
+                >
+                  <Icon name={item.icon} size={16} />
+                  <span>{item.label}</span>
+                  {renderBadge(item.badge)}
+                </Link>
+              );
+            })}
 
-            {/* Active Service for Mobile */}
             {activeService && role === 'user' && (
               <Link
                 to="/live-tracking"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center space-x-3 px-3 py-2 bg-success text-success-foreground rounded-md text-sm font-medium trust-transition"
+                className="flex items-center space-x-3 rounded-md bg-emerald-500 px-3 py-2 text-sm font-medium text-white"
               >
-                <div className="w-2 h-2 bg-success-foreground rounded-full animate-pulse-soft"></div>
+                <div className="h-2 w-2 rounded-full bg-white animate-pulse" />
                 <span>Active Service</span>
               </Link>
             )}
 
-            {/* Search for Mobile */}
             {role === 'user' && (
               <div className="px-3 py-2">
                 <div className="relative">
-                  <Icon name="Search" size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                  <Icon
+                    name="Search"
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+                  />
                   <input
                     type="text"
                     placeholder="Search technicians..."
-                    className="w-full pl-10 pr-4 py-2 bg-muted border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-10 py-2 text-sm text-white placeholder:text-slate-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60"
                   />
                 </div>
               </div>
             )}
-
-
           </div>
         </div>
       )}
