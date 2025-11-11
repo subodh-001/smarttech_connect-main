@@ -107,8 +107,8 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
                   </div>
                 {booking?.technician?.experience != null && (
                   <>
-                    <span>•</span>
-                    <span>{booking?.technician?.experience} years experience</span>
+                  <span>•</span>
+                  <span>{booking?.technician?.experience} years experience</span>
                   </>
                 )}
                 </div>

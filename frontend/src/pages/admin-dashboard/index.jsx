@@ -971,28 +971,6 @@ const AdminDashboard = () => {
           ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => handleTabChange(tab.key)}
-              className={`flex items-center space-x-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.key
-                  ? 'bg-primary text-primary-foreground shadow-subtle'
-                  : 'bg-muted text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              <Icon name={tab.icon} size={16} />
-              <span>{tab.label}</span>
-              {tab.badge ? (
-                <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
-                  {tab.badge}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-
         <div className="space-y-6">
           {activeTab === 'overview' ? (
             <div className="space-y-6">

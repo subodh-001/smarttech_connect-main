@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import InteractiveMap from '../../../components/maps/InteractiveMap';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+
+const DEFAULT_CENTER = [12.9716, 77.5946];
+const LIGHT_TILE = 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png';
+const DARK_TILE = 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png';
 
 const LiveMap = ({
   userLocation,
@@ -11,74 +16,89 @@ const LiveMap = ({
   onToggleTraffic,
   showTraffic = false,
 }) => {
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const mapRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  useEffect(() => {
-    // Simulate map loading
-    const timer = setTimeout(() => {
-      setMapLoaded(true);
-    }, 1000);
+  const markers = useMemo(() => {
+    const items = [];
 
-    return () => clearTimeout(timer);
-  }, []);
+    if (userLocation?.lat && userLocation?.lng) {
+      items.push({
+        id: 'map-user',
+        type: 'user',
+        position: [userLocation.lat, userLocation.lng],
+        label: 'U',
+        accent: '#2563eb',
+      });
+    }
 
-  const handleFullscreenToggle = () => {
-    setIsFullscreen(!isFullscreen);
+    if (technicianLocation?.lat && technicianLocation?.lng) {
+      items.push({
+        id: 'map-technician',
+        type: 'technician',
+        position: [technicianLocation.lat, technicianLocation.lng],
+        label: 'Technician',
+        highlight: true,
+        accent: '#0f172a',
+      });
+    }
+
+    if (serviceLocation?.lat && serviceLocation?.lng) {
+      items.push({
+        id: 'map-destination',
+        type: 'destination',
+        position: [serviceLocation.lat, serviceLocation.lng],
+        accent: '#f97316',
+      });
+    }
+
+    if (!items.length) {
+      items.push({ id: 'fallback', type: 'destination', position: DEFAULT_CENTER, accent: '#64748b' });
+    }
+
+    return items;
+  }, [userLocation, technicianLocation, serviceLocation]);
+
+  const handleRecenter = () => {
+    if (mapRef.current?.fitToMarkers) {
+      mapRef.current.fitToMarkers();
+    }
+    onRecenterMap?.();
   };
 
-  const generateMapUrl = () => {
-    const points = [userLocation, technicianLocation, serviceLocation].filter(
-      (point) => point?.lat && point?.lng,
-    );
-
-    if (!points.length) return '';
-
-    const centerLat = points.reduce((sum, point) => sum + point.lat, 0) / points.length;
-    const centerLng = points.reduce((sum, point) => sum + point.lng, 0) / points.length;
-
-    return `https://www.google.com/maps?q=${centerLat},${centerLng}&z=13&output=embed`;
+  const handleFullscreenToggle = () => {
+    setIsFullscreen((prev) => !prev);
   };
 
   return (
-    <div className={`relative bg-muted rounded-lg overflow-hidden ${
-      isFullscreen ? 'fixed inset-0 z-50' : 'h-96 lg:h-[500px]'
-    }`}>
-      {/* Map Loading State */}
-      {!mapLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted">
-          <div className="text-center space-y-3">
-            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="text-muted-foreground">Loading live map...</p>
-          </div>
-        </div>
-      )}
-      {/* Google Maps Iframe */}
-      {mapLoaded && (
-        <iframe
-          width="100%"
-          height="100%"
-          loading="lazy"
-          title="Live Tracking Map"
-          referrerPolicy="no-referrer-when-downgrade"
-          src={generateMapUrl()}
-          className="border-0"
-        />
-      )}
-      {/* Map Controls */}
+    <div
+      className={`relative rounded-lg border border-border bg-card/60 backdrop-blur ${
+        isFullscreen ? 'fixed inset-0 z-50' : 'h-96 lg:h-[500px]'
+      }`}
+    >
+      <InteractiveMap
+        ref={mapRef}
+        markers={markers}
+        fitToMarkers
+        className="h-full"
+        tileUrl={showTraffic ? DARK_TILE : LIGHT_TILE}
+      />
+
+      <div className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-border/40"></div>
+
       <div className="absolute top-4 right-4 space-y-2">
         <Button
           variant="secondary"
           size="icon"
-          onClick={onRecenterMap}
+          onClick={handleRecenter}
           className="trust-shadow-md"
           title="Recenter Map"
         >
           <Icon name="Navigation" size={16} />
         </Button>
-        
+
         <Button
-          variant={showTraffic ? "default" : "secondary"}
+          variant={showTraffic ? 'default' : 'secondary'}
           size="icon"
           onClick={onToggleTraffic}
           className="trust-shadow-md"
@@ -86,40 +106,37 @@ const LiveMap = ({
         >
           <Icon name="Car" size={16} />
         </Button>
-        
+
         <Button
           variant="secondary"
           size="icon"
           onClick={handleFullscreenToggle}
           className="trust-shadow-md"
-          title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
         >
-          <Icon name={isFullscreen ? "Minimize2" : "Maximize2"} size={16} />
+          <Icon name={isFullscreen ? 'Minimize2' : 'Maximize2'} size={16} />
         </Button>
       </div>
-      {/* Location Indicators */}
+
       <div className="absolute bottom-4 left-4 space-y-2">
-        {/* User Location */}
-        <div className="flex items-center space-x-2 bg-card/90 backdrop-blur-sm px-3 py-2 rounded-lg trust-shadow">
-          <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+        <div className="flex items-center space-x-2 rounded-lg bg-card/90 px-3 py-2 trust-shadow">
+          <div className="h-3 w-3 rounded-full bg-blue-500"></div>
           <span className="text-sm font-medium text-foreground">Your Location</span>
         </div>
-        
-        {/* Technician Location */}
-        <div className="flex items-center space-x-2 bg-card/90 backdrop-blur-sm px-3 py-2 rounded-lg trust-shadow">
-          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+        <div className="flex items-center space-x-2 rounded-lg bg-card/90 px-3 py-2 trust-shadow">
+          <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse"></div>
           <span className="text-sm font-medium text-foreground">Technician</span>
         </div>
         {serviceLocation ? (
-          <div className="flex items-center space-x-2 bg-card/90 backdrop-blur-sm px-3 py-2 rounded-lg trust-shadow">
-            <div className="w-3 h-3 bg-primary rounded-full"></div>
+          <div className="flex items-center space-x-2 rounded-lg bg-card/90 px-3 py-2 trust-shadow">
+            <div className="h-3 w-3 rounded-full bg-primary"></div>
             <span className="text-sm font-medium text-foreground">Service Address</span>
           </div>
         ) : null}
       </div>
-      {/* Route Information */}
+
       {route && (
-        <div className="absolute bottom-4 right-4 bg-card/90 backdrop-blur-sm p-3 rounded-lg trust-shadow max-w-48">
+        <div className="absolute bottom-4 right-4 max-w-48 rounded-lg bg-card/90 p-3 trust-shadow">
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Distance</span>
@@ -129,22 +146,22 @@ const LiveMap = ({
               <span className="text-sm text-muted-foreground">Duration</span>
               <span className="text-sm font-medium text-foreground">{route?.duration}</span>
             </div>
-            {route?.trafficDelay && (
+            {route?.trafficDelay ? (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Traffic Delay</span>
-                <span className="text-sm font-medium text-orange-600">+{route?.trafficDelay}</span>
+                <span className="text-sm font-medium text-orange-500">+{route?.trafficDelay}</span>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       )}
-      {/* Fullscreen Close Button */}
+
       {isFullscreen && (
         <Button
           variant="secondary"
           size="icon"
           onClick={handleFullscreenToggle}
-          className="absolute top-4 left-4 trust-shadow-md"
+          className="absolute left-4 top-4 trust-shadow-md"
         >
           <Icon name="X" size={16} />
         </Button>

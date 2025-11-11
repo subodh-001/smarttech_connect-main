@@ -48,6 +48,7 @@ const Header = ({
       { label: 'Users', path: `${adminTabsBase}?tab=users`, icon: 'Users' },
       { label: 'Technicians', path: `${adminTabsBase}?tab=technicians`, icon: 'UserCog' },
       { label: 'Services', path: `${adminTabsBase}?tab=services`, icon: 'Briefcase' },
+      { label: 'Approvals', path: `${adminTabsBase}?tab=approvals`, icon: 'ShieldCheck' },
       { label: 'Reports', path: `${adminTabsBase}?tab=reports`, icon: 'BarChart3' },
       { label: 'Settings', path: `${adminTabsBase}?tab=settings`, icon: 'Settings' },
     ];

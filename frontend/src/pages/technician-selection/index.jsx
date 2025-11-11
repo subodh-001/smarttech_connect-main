@@ -141,6 +141,15 @@ const filterTechnicians = (source = [], filters = defaultFilters) => {
       return result;
 };
 
+const formatDisplayName = (name) => {
+  if (!name) return 'Technician';
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`)
+    .join(' ');
+};
+
 const TechnicianSelection = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -176,22 +185,26 @@ const TechnicianSelection = () => {
       }
 
       if (!silent) {
-        setLoading(true);
-        setError(null);
+    setLoading(true);
+    setError(null);
       }
 
-      try {
-        const params = {
-          category: serviceRequest.category,
-          radius: DEFAULT_RADIUS_KM,
-        };
+    try {
+      const params = {
+        category: serviceRequest.category,
+        radius: DEFAULT_RADIUS_KM,
+      };
 
-        if (serviceRequest.locationCoordinates) {
-          params.lat = serviceRequest.locationCoordinates.lat;
-          params.lng = serviceRequest.locationCoordinates.lng;
+        const coords = serviceRequest.locationCoordinates;
+        if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number') {
+          params.lat = coords.lat;
+          params.lng = coords.lng;
+        } else {
+          params.lat = DEFAULT_COORDINATES.lat;
+          params.lng = DEFAULT_COORDINATES.lng;
         }
 
-        const { data } = await axios.get('/api/technicians/available', { params });
+      const { data } = await axios.get('/api/technicians/available', { params });
         const surgeMultiplier =
           serviceRequest?.requirements?.surgeMultiplier ??
           (serviceRequest?.priority === 'urgent'
@@ -201,29 +214,32 @@ const TechnicianSelection = () => {
             : 1);
 
         const fetchedTechnicians = (data?.technicians || []).map((tech) => {
+          const formattedName = formatDisplayName(tech?.name || tech?.fullName);
           const baseRate = Number(tech.hourlyRate || 0);
           const priceWithSurge = surgeMultiplier !== 1 ? Math.round(baseRate * surgeMultiplier) : baseRate;
           return {
             ...tech,
+            name: formattedName,
+            displayName: formattedName,
             priceWithSurge,
             surgeMultiplier,
           };
         });
 
         setTechnicians(fetchedTechnicians);
-        setMatchingSummary(data?.summary || null);
+      setMatchingSummary(data?.summary || null);
         setFilteredTechnicians(filterTechnicians(fetchedTechnicians, filtersRef.current));
-      } catch (err) {
-        console.error('Failed to load technicians:', err);
+    } catch (err) {
+      console.error('Failed to load technicians:', err);
         if (!silent) {
-          setError('Unable to load technicians right now. Please try again later.');
+      setError('Unable to load technicians right now. Please try again later.');
         }
-        setTechnicians([]);
-        setFilteredTechnicians([]);
-      } finally {
+      setTechnicians([]);
+      setFilteredTechnicians([]);
+    } finally {
         if (!silent) {
-          setLoading(false);
-        }
+      setLoading(false);
+    }
       }
     },
     [serviceRequest],
@@ -362,6 +378,23 @@ const TechnicianSelection = () => {
   };
 
   const categoryLabel = CATEGORY_LABELS[serviceRequest?.category] || serviceRequest?.category;
+
+  const userLocation = useMemo(() => {
+    const lat =
+      typeof serviceRequest?.locationCoordinates?.lat === 'number'
+        ? serviceRequest.locationCoordinates.lat
+        : DEFAULT_COORDINATES.lat;
+    const lng =
+      typeof serviceRequest?.locationCoordinates?.lng === 'number'
+        ? serviceRequest.locationCoordinates.lng
+        : DEFAULT_COORDINATES.lng;
+
+    return {
+      lat,
+      lng,
+      address: serviceRequest?.locationAddress || 'Search Technicians',
+    };
+  }, [serviceRequest]);
 
   const budgetLabel = useMemo(() => {
     if (typeof serviceRequest?.budgetMin === 'number' && typeof serviceRequest?.budgetMax === 'number') {
@@ -528,6 +561,7 @@ const TechnicianSelection = () => {
                     selectedTechnician={selectedTechnician}
                     onTechnicianSelect={handleTechnicianSelect}
                     userLocation={userLocation}
+                    isProfileOpen={Boolean(profileTechnician)}
                   />
                 </div>
               </div>
@@ -582,6 +616,7 @@ const TechnicianProfileDrawer = ({ technician, onClose }) => {
   if (!technician) return null;
 
   const specialties = technician.specializations || technician.specialtyLabels || [];
+  const displayName = technician.displayName || formatDisplayName(technician?.name);
   const rate = Number.isFinite(technician.priceWithSurge)
     ? technician.priceWithSurge.toLocaleString('en-IN')
     : Number.isFinite(technician.hourlyRate)
@@ -593,7 +628,7 @@ const TechnicianProfileDrawer = ({ technician, onClose }) => {
       <div className="w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">{technician?.name}</h3>
+            <h3 className="text-lg font-semibold text-foreground">{displayName}</h3>
             <p className="text-xs text-muted-foreground">
               {technician?.yearsOfExperience || 0} years experience • Responds in {technician?.responseTime}
             </p>

@@ -71,6 +71,36 @@ const formatMessage = (messageDoc) => {
   };
 };
 
+const getObjectIdString = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value._id) return value._id.toString();
+  if (typeof value.toString === 'function') return value.toString();
+  return null;
+};
+
+const userCanAccessRequest = (user, requestDoc) => {
+  if (!user || !requestDoc) return false;
+  if (user.role === 'admin') return true;
+  const customerId = getObjectIdString(requestDoc.customerId);
+  const technicianId = getObjectIdString(requestDoc.technicianId);
+  if (user.role === 'technician') {
+    return technicianId && technicianId === user.sub;
+  }
+  if (user.role === 'user') {
+    return customerId && customerId === user.sub;
+  }
+  return false;
+};
+
+const ensureRequestAccess = (req, res, requestDoc) => {
+  if (!userCanAccessRequest(req.user, requestDoc)) {
+    res.status(403).json({ error: 'You do not have permission to access this service request.' });
+    return false;
+  }
+  return true;
+};
+
 const formatConversation = (requestDoc, { currentUserId, role, technicianProfiles }) => {
   const doc = toPlain(requestDoc);
   const customer = doc.customerId || {};
@@ -145,6 +175,30 @@ const formatConversation = (requestDoc, { currentUserId, role, technicianProfile
   };
 };
 
+const formatComment = (commentDoc) => {
+  if (!commentDoc) return null;
+  const comment = toPlain(commentDoc);
+  const authorDoc = comment.authorId || {};
+  const authorId =
+    authorDoc._id?.toString?.() ||
+    (typeof comment.authorId === 'string' ? comment.authorId : comment.authorId?.toString?.());
+  const name = authorDoc.fullName || authorDoc.email || (comment.authorRole === 'admin' ? 'Admin' : 'Technician');
+
+  return {
+    id: comment._id ? comment._id.toString() : undefined,
+    body: comment.body || '',
+    createdAt: comment.createdAt || new Date(),
+    author: {
+      id: authorId,
+      code: authorDoc.publicId || null,
+      name,
+      role: comment.authorRole || authorDoc.role || 'technician',
+      avatar: authorDoc.avatarUrl || fallbackAvatar(name),
+    },
+    attachments: Array.isArray(comment.attachments) ? comment.attachments : [],
+  };
+};
+
 const formatServiceRequest = (request) => {
   const doc = toPlain(request);
   const technicianUser = doc.technicianId || doc.technician;
@@ -175,6 +229,7 @@ const formatServiceRequest = (request) => {
     customer: customerUser
       ? {
           id: customerUser._id ? customerUser._id.toString() : undefined,
+          code: customerUser.publicId || null,
           name: customerUser.fullName || customerUser.email,
           email: customerUser.email,
           phone: customerUser.phone,
@@ -183,12 +238,16 @@ const formatServiceRequest = (request) => {
     technician: technicianUser
       ? {
           id: technicianUser._id ? technicianUser._id.toString() : undefined,
+          code: technicianUser.publicId || null,
           name: technicianUser.fullName || technicianUser.email,
           email: technicianUser.email,
           phone: technicianUser.phone,
           avatar: technicianUser.avatarUrl,
         }
       : null,
+    technicianComments: Array.isArray(doc.technicianComments)
+      ? doc.technicianComments.map(formatComment).filter(Boolean)
+      : [],
   };
 };
 
@@ -207,8 +266,8 @@ router.get('/available', authMiddleware, async (req, res) => {
         { technicianId },
       ],
     })
-      .populate('customerId', 'fullName email phone')
-      .populate('technicianId', 'fullName email phone')
+      .populate('customerId', 'fullName email phone publicId')
+      .populate('technicianComments.authorId', 'fullName email avatarUrl role publicId')
       .sort({ createdAt: -1 })
       .limit(50);
 
@@ -240,8 +299,9 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 
     const requests = await ServiceRequest.find(filter)
-      .populate('technicianId', 'fullName email phone avatarUrl')
-      .populate('customerId', 'fullName email phone')
+      .populate('technicianId', 'fullName email phone avatarUrl publicId')
+      .populate('customerId', 'fullName email phone publicId')
+      .populate('technicianComments.authorId', 'fullName email avatarUrl role publicId')
       .sort({ createdAt: -1 })
       .limit(Number(limit));
 
@@ -266,8 +326,8 @@ router.post('/', authMiddleware, async (req, res) => {
     });
 
     const populated = await ServiceRequest.findById(request._id)
-      .populate('technicianId', 'fullName email phone avatarUrl')
-      .populate('customerId', 'fullName email phone');
+      .populate('technicianId', 'fullName email phone avatarUrl publicId')
+      .populate('customerId', 'fullName email phone publicId');
 
     const location = populated.locationCoordinates || {};
     const matching = await findAvailableTechnicians({
@@ -361,13 +421,85 @@ router.patch('/:id/status', authMiddleware, async (req, res) => {
     await request.save();
 
     const populated = await ServiceRequest.findById(id)
-      .populate('technicianId', 'fullName email phone avatarUrl')
-      .populate('customerId', 'fullName email phone');
+      .populate('technicianId', 'fullName email phone avatarUrl publicId')
+      .populate('customerId', 'fullName email phone publicId');
 
     res.json(formatServiceRequest(populated));
   } catch (error) {
     console.error('Failed to update service request:', error);
     res.status(500).json({ error: 'Failed to update service request' });
+  }
+});
+
+router.get('/:id/comments', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const request = await ServiceRequest.findById(id)
+      .populate('technicianComments.authorId', 'fullName email avatarUrl role publicId')
+      .populate('customerId', 'fullName email phone publicId')
+      .populate('technicianId', 'fullName email phone avatarUrl publicId');
+
+    if (!request) {
+      return res.status(404).json({ error: 'Service request not found.' });
+    }
+
+    if (!ensureRequestAccess(req, res, request)) return;
+
+    res.json({ comments: (request.technicianComments || []).map(formatComment) });
+  } catch (error) {
+    console.error('Failed to fetch comments:', error);
+    res.status(500).json({ error: 'Failed to fetch service request comments.' });
+  }
+});
+
+router.post('/:id/comments', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { body } = req.body || {};
+    const trimmed = (body || '').trim();
+
+    if (!trimmed) {
+      return res.status(400).json({ error: 'Comment body is required.' });
+    }
+
+    const request = await ServiceRequest.findById(id)
+      .populate('technicianComments.authorId', 'fullName email avatarUrl role publicId')
+      .populate('customerId', 'fullName email phone publicId')
+      .populate('technicianId', 'fullName email phone avatarUrl publicId');
+
+    if (!request) {
+      return res.status(404).json({ error: 'Service request not found.' });
+    }
+
+    if (!ensureRequestAccess(req, res, request)) return;
+
+    const { role, sub } = req.user;
+
+    if (role !== 'technician' && role !== 'admin') {
+      return res.status(403).json({ error: 'Only technicians or admins can post comments.' });
+    }
+
+    if (role === 'technician') {
+      const technicianId = getObjectIdString(request.technicianId);
+      if (!technicianId || technicianId !== sub) {
+        return res.status(403).json({ error: 'Only the assigned technician can comment.' });
+      }
+    }
+
+    request.technicianComments.push({
+      authorId: sub,
+      authorRole: role === 'admin' ? 'admin' : 'technician',
+      body: trimmed,
+      attachments: [],
+    });
+
+    await request.save();
+    await request.populate('technicianComments.authorId', 'fullName email avatarUrl role publicId');
+
+    res.status(201).json({ comments: (request.technicianComments || []).map(formatComment) });
+  } catch (error) {
+    console.error('Failed to post comment:', error);
+    res.status(500).json({ error: 'Failed to post comment.' });
   }
 });
 
@@ -405,8 +537,8 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         technicianId: 1,
         messages: 1,
       })
-      .populate('customerId', 'fullName email phone avatarUrl updatedAt')
-      .populate('technicianId', 'fullName email phone avatarUrl updatedAt')
+      .populate('customerId', 'fullName email phone avatarUrl updatedAt publicId')
+      .populate('technicianId', 'fullName email phone avatarUrl updatedAt publicId')
       .populate('messages.senderId', 'fullName email avatarUrl role')
       .sort({ updatedAt: -1 });
 
@@ -441,8 +573,8 @@ router.get('/:id/messages', authMiddleware, async (req, res) => {
     const { role, sub } = req.user;
 
     const request = await ServiceRequest.findById(id)
-      .populate('customerId', 'fullName email phone avatarUrl updatedAt')
-      .populate('technicianId', 'fullName email phone avatarUrl updatedAt')
+      .populate('customerId', 'fullName email phone avatarUrl updatedAt publicId')
+      .populate('technicianId', 'fullName email phone avatarUrl updatedAt publicId')
       .populate('messages.senderId', 'fullName email avatarUrl role')
       .lean();
 
@@ -523,8 +655,8 @@ router.post('/:id/messages', authMiddleware, async (req, res) => {
     }
 
     const request = await ServiceRequest.findById(id)
-      .populate('customerId', 'fullName email phone avatarUrl')
-      .populate('technicianId', 'fullName email phone avatarUrl');
+      .populate('customerId', 'fullName email phone avatarUrl publicId')
+      .populate('technicianId', 'fullName email phone avatarUrl publicId');
 
     if (!request) {
       return res.status(404).json({ error: 'Conversation not found' });
@@ -570,8 +702,9 @@ router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const request = await ServiceRequest.findById(id)
-      .populate('technicianId', 'fullName email phone avatarUrl')
-      .populate('customerId', 'fullName email phone');
+      .populate('technicianId', 'fullName email phone avatarUrl publicId')
+      .populate('customerId', 'fullName email phone publicId')
+      .populate('technicianComments.authorId', 'fullName email avatarUrl role publicId');
     if (!request) {
       return res.status(404).json({ error: 'Service request not found' });
     }

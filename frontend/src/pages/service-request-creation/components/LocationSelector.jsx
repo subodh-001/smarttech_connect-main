@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import InteractiveMap from '../../../components/maps/InteractiveMap';
 
 const coordinatePresets = {
   "Home - 123 MG Road, Bangalore, Karnataka 560001": { lat: 12.9823, lng: 77.6070 },
@@ -76,15 +77,22 @@ const LocationSelector = ({
         </div>
 
         {/* Map Preview */}
-        <div className="w-full h-48 bg-muted rounded-lg overflow-hidden">
-          <iframe
-            width="100%"
-            height="100%"
-            loading="lazy"
-            title="Service Location"
-            referrerPolicy="no-referrer-when-downgrade"
-            src={`https://www.google.com/maps?q=${coordinates?.lat ?? 12.9716},${coordinates?.lng ?? 77.5946}&z=14&output=embed`}
-            className="border-0"
+        <div className="w-full h-48 overflow-hidden rounded-lg border border-border bg-muted/40">
+          <InteractiveMap
+            markers={useMemo(
+              () => [
+                {
+                  id: 'selector-location',
+                  type: 'destination',
+                  position: [coordinates?.lat ?? 12.9716, coordinates?.lng ?? 77.5946],
+                  accent: '#2563eb',
+                },
+              ],
+              [coordinates],
+            )}
+            fitToMarkers={false}
+            center={[coordinates?.lat ?? 12.9716, coordinates?.lng ?? 77.5946]}
+            zoom={14}
           />
         </div>
       </div>

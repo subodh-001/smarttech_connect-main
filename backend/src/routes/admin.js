@@ -20,6 +20,7 @@ const ensureAdmin = (req, res) => {
 
 const toPlainUser = (doc, extras = {}) => ({
   id: doc._id ? doc._id.toString() : undefined,
+  code: doc.publicId || null,
   name: doc.fullName || doc.email,
   email: doc.email,
   phone: doc.phone || null,
@@ -38,6 +39,7 @@ const toPlainService = (doc) => {
 
   return {
     id: doc._id ? doc._id.toString() : undefined,
+    code: doc.publicId || null,
     title: doc.title,
     category: doc.category,
     status: doc.status,
@@ -46,12 +48,14 @@ const toPlainService = (doc) => {
     customer: customerUser
       ? {
           id: customerUser._id ? customerUser._id.toString() : undefined,
+          code: customerUser.publicId || null,
           name: customerUser.fullName || customerUser.email,
         }
       : null,
     technician: technicianUser
       ? {
           id: technicianUser._id ? technicianUser._id.toString() : undefined,
+          code: technicianUser.publicId || null,
           name: technicianUser.fullName || technicianUser.email,
         }
       : null,
@@ -103,7 +107,9 @@ const toPlainTechnician = (doc, extras = {}) => {
     : null;
   return {
     id: doc._id ? doc._id.toString() : undefined,
+    code: doc.publicId || null,
     userId: userDoc._id ? userDoc._id.toString() : undefined,
+    userCode: userDoc.publicId || null,
     name: userDoc.fullName || userDoc.email || 'Technician',
     email: userDoc.email || null,
     phone: userDoc.phone || null,
@@ -290,6 +296,7 @@ const buildUserFilters = (query) => {
       { email: regex },
       { phone: regex },
       { city: regex },
+      { publicId: regex },
     ];
   }
 
@@ -540,7 +547,13 @@ const buildTechnicianFilters = async (query) => {
 
   const matchingUsers = await User.find(
     {
-      $or: [{ fullName: regex }, { email: regex }, { phone: regex }, { city: regex }],
+      $or: [
+        { fullName: regex },
+        { email: regex },
+        { phone: regex },
+        { city: regex },
+        { publicId: regex },
+      ],
     },
     '_id'
   ).lean();
@@ -566,7 +579,7 @@ router.get('/technicians', authMiddleware, async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('userId', 'fullName email phone city role isActive createdAt updatedAt')
+      .populate('userId', 'fullName email phone city role isActive createdAt updatedAt publicId')
       .lean();
 
     const [technicians, total] = await Promise.all([query, Technician.countDocuments(filters)]);
@@ -633,9 +646,10 @@ router.get('/technicians/:id', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Invalid technician id.' });
     }
 
-    const technicianDoc = await Technician.findById(id)
-      .populate('userId', 'fullName email phone city role isActive createdAt updatedAt')
-      .lean();
+    const technicianDoc = await Technician.findById(id).populate(
+      'userId',
+      'fullName email phone city role isActive createdAt updatedAt publicId'
+    );
 
     if (!technicianDoc) {
       return res.status(404).json({ error: 'Technician not found.' });
@@ -843,7 +857,13 @@ const buildServiceFilters = async (query) => {
 
   const matchingUsers = await User.find(
     {
-      $or: [{ fullName: regex }, { email: regex }, { phone: regex }, { city: regex }],
+      $or: [
+        { fullName: regex },
+        { email: regex },
+        { phone: regex },
+        { city: regex },
+        { publicId: regex },
+      ],
     },
     '_id'
   ).lean();
@@ -993,7 +1013,7 @@ router.get('/approvals', authMiddleware, async (req, res) => {
 
     const [technicians, total] = await Promise.all([
       Technician.find(baseFilter)
-        .populate('userId', 'fullName email phone')
+        .populate('userId', 'fullName email phone publicId')
         .sort({ kycSubmittedAt: -1 })
         .skip(skip)
         .limit(limit)

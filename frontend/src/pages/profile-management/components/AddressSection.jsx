@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Input from '../../../components/ui/Input';
 import Button from '../../../components/ui/Button';
 import Icon from '../../../components/AppIcon';
+import InteractiveMap from '../../../components/maps/InteractiveMap';
 
 const AddressSection = ({ addresses, onUpdateAddresses }) => {
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -117,16 +118,29 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
                   {address?.street}, {address?.city}, {address?.state} {address?.zipCode}
                 </p>
                 
-                {/* Google Maps Integration */}
-                <div className="w-full h-32 rounded-lg overflow-hidden mb-3">
-                  <iframe
-                    width="100%"
-                    height="100%"
-                    loading="lazy"
-                    title={address?.label}
-                    referrerPolicy="no-referrer-when-downgrade"
-                    src={`https://www.google.com/maps?q=${address?.coordinates?.lat},${address?.coordinates?.lng}&z=14&output=embed`}
-                    className="border-0"
+                {/* Map Preview */}
+                <div className="mb-3 h-32 overflow-hidden rounded-lg border border-border">
+                  <InteractiveMap
+                    markers={useMemo(
+                      () =>
+                        address?.coordinates?.lat && address?.coordinates?.lng
+                          ? [
+                              {
+                                id: `addr-${address?.id}`,
+                                type: 'destination',
+                                position: [address.coordinates.lat, address.coordinates.lng],
+                                accent: '#2563eb',
+                              },
+                            ]
+                          : [],
+                      [address],
+                    )}
+                    center={
+                      address?.coordinates?.lat && address?.coordinates?.lng
+                        ? [address.coordinates.lat, address.coordinates.lng]
+                        : undefined
+                    }
+                    zoom={14}
                   />
                 </div>
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const NotificationCenter = ({ notifications, onMarkAsRead, onMarkAllAsRead }) => {
+const NotificationCenter = ({ notifications, onMarkAsRead, onMarkAllAsRead, onNotificationClick }) => {
   const [filter, setFilter] = useState('all');
 
   const getNotificationIcon = (type) => {
@@ -103,69 +103,84 @@ const NotificationCenter = ({ notifications, onMarkAsRead, onMarkAllAsRead }) =>
             <p className="text-text-secondary">No notifications to show</p>
           </div>
         ) : (
-          filteredNotifications?.map((notification) => (
-            <div
-              key={notification?.id}
-              className={`p-4 rounded-lg border transition-smooth cursor-pointer hover:shadow-subtle ${
-                notification?.read 
-                  ? 'bg-muted/50 border-border' :'bg-card border-primary/20 shadow-sm'
-              }`}
-              onClick={() => onMarkAsRead(notification?.id)}
-            >
-              <div className="flex items-start space-x-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  notification?.read ? 'bg-muted' : 'bg-primary/10'
-                }`}>
-                  <Icon 
-                    name={getNotificationIcon(notification?.type)} 
-                    size={20} 
-                    color={getNotificationColor(notification?.type, notification?.priority)}
-                  />
-                </div>
+          filteredNotifications?.map((notification) => {
+            const handleNotificationSelect = () => {
+              if (onMarkAsRead) {
+                onMarkAsRead(notification?.id);
+              }
+              if (onNotificationClick) {
+                onNotificationClick(notification);
+              }
+            };
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between mb-1">
-                    <h4 className={`font-medium ${
+            return (
+              <div
+                key={notification?.id}
+                className={`p-4 rounded-lg border transition-smooth cursor-pointer hover:shadow-subtle ${
+                  notification?.read 
+                    ? 'bg-muted/50 border-border' :'bg-card border-primary/20 shadow-sm'
+                }`}
+                onClick={handleNotificationSelect}
+              >
+                <div className="flex items-start space-x-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    notification?.read ? 'bg-muted' : 'bg-primary/10'
+                  }`}>
+                    <Icon 
+                      name={getNotificationIcon(notification?.type)} 
+                      size={20} 
+                      color={getNotificationColor(notification?.type, notification?.priority)}
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-1">
+                      <h4 className={`font-medium ${
+                        notification?.read ? 'text-text-secondary' : 'text-text-primary'
+                      }`}>
+                        {notification?.title}
+                      </h4>
+                      <div className="flex items-center space-x-2 ml-2">
+                        {notification?.priority === 'high' && (
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityBadge(notification?.priority)}`}>
+                            HIGH
+                          </div>
+                        )}
+                        {!notification?.read && (
+                          <div className="w-2 h-2 bg-primary rounded-full"></div>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className={`text-sm mb-2 ${
                       notification?.read ? 'text-text-secondary' : 'text-text-primary'
                     }`}>
-                      {notification?.title}
-                    </h4>
-                    <div className="flex items-center space-x-2 ml-2">
-                      {notification?.priority === 'high' && (
-                        <div className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityBadge(notification?.priority)}`}>
-                          HIGH
-                        </div>
-                      )}
-                      {!notification?.read && (
-                        <div className="w-2 h-2 bg-primary rounded-full"></div>
+                      {notification?.message}
+                    </p>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-text-secondary">
+                        {notification?.timeAgo}
+                      </span>
+                      {notification?.actionRequired && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleNotificationSelect();
+                          }}
+                        >
+                          Take Action
+                        </Button>
                       )}
                     </div>
                   </div>
-
-                  <p className={`text-sm mb-2 ${
-                    notification?.read ? 'text-text-secondary' : 'text-text-primary'
-                  }`}>
-                    {notification?.message}
-                  </p>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-text-secondary">
-                      {notification?.timeAgo}
-                    </span>
-                    {notification?.actionRequired && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                      >
-                        Take Action
-                      </Button>
-                    )}
-                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

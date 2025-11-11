@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Header from '../../components/ui/Header';
@@ -15,6 +15,7 @@ import { useAuth } from '../../contexts/NewAuthContext';
 
 const MS_IN_MINUTE = 60 * 1000;
 const MS_IN_DAY = 24 * MS_IN_MINUTE * 60;
+const NOTIFICATION_STORAGE_PREFIX = 'stc-tech-notifications-read';
 
 const formatRelativeTime = (value) => {
   if (!value) return '';
@@ -120,6 +121,8 @@ const buildNotifications = (available, active, completed) => {
       read: false,
       priority: request.priority === 'urgent' ? 'high' : 'medium',
       actionRequired: true,
+      serviceRequestId: request.id,
+      targetTab: 'jobs',
     });
   });
 
@@ -135,6 +138,8 @@ const buildNotifications = (available, active, completed) => {
       read: false,
       priority: 'medium',
       actionRequired: false,
+      serviceRequestId: request.id,
+      targetTab: 'active',
     });
   });
 
@@ -150,10 +155,40 @@ const buildNotifications = (available, active, completed) => {
       read: false,
       priority: 'low',
       actionRequired: false,
+      serviceRequestId: request.id,
+      targetTab: 'earnings',
     });
   });
 
   return items;
+};
+
+const mergeNotificationStates = (nextNotifications, existingNotifications, persistedReadIds = new Set()) => {
+  if (!Array.isArray(nextNotifications)) return [];
+
+  const existingMap = new Map();
+  if (Array.isArray(existingNotifications)) {
+    existingNotifications.forEach((notification) => {
+      if (notification?.id) {
+        existingMap.set(notification.id, notification);
+      }
+    });
+  }
+
+  return nextNotifications.map((notification) => {
+    const existing = notification?.id ? existingMap.get(notification.id) : null;
+    const wasReadFromExisting = existing?.read === true;
+    const wasPersisted = notification?.id ? persistedReadIds.has(notification.id) : false;
+
+    if (existing || wasPersisted) {
+      return {
+        ...notification,
+        read: wasReadFromExisting || wasPersisted,
+      };
+    }
+
+    return notification;
+  });
 };
 
 const mapAvailableRequest = (request) => ({
@@ -215,6 +250,18 @@ const TechnicianDashboard = () => {
   const [technicianLocation, setTechnicianLocation] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState(null);
+  const [focusedJobId, setFocusedJobId] = useState(null);
+
+  const notificationReadIdsRef = useRef(new Set());
+  const notificationStorageKey = useMemo(() => {
+    const technicianIdentifier =
+      userProfile?.publicId ||
+      userProfile?.id ||
+      userProfile?._id ||
+      user?.publicId ||
+      user?.id;
+    return `${NOTIFICATION_STORAGE_PREFIX}-${technicianIdentifier || 'anon'}`;
+  }, [userProfile?.publicId, userProfile?.id, userProfile?._id, user?.publicId, user?.id]);
 
   const [kycInfo, setKycInfo] = useState({ status: 'loading' });
   const [kycError, setKycError] = useState(null);
@@ -271,7 +318,8 @@ const TechnicianDashboard = () => {
           )
           .map(mapAppointment)
       );
-      setNotifications(buildNotifications(availableRaw, activeRaw, completedRaw));
+      const generatedNotifications = buildNotifications(availableRaw, activeRaw, completedRaw);
+      setNotifications((prev) => mergeNotificationStates(generatedNotifications, prev, notificationReadIdsRef.current));
       setEarningsData(calculateEarnings(completedRaw, assignedRaw));
     } catch (error) {
       console.error('Failed to load technician dashboard data:', error);
@@ -320,6 +368,54 @@ const TechnicianDashboard = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      notificationReadIdsRef.current = new Set();
+      return;
+    }
+
+    try {
+      const raw = notificationStorageKey ? window.localStorage.getItem(notificationStorageKey) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          notificationReadIdsRef.current = new Set(parsed.filter((id) => typeof id === 'string'));
+        } else {
+          notificationReadIdsRef.current = new Set();
+        }
+      } else {
+        notificationReadIdsRef.current = new Set();
+      }
+    } catch (error) {
+      console.error('Failed to load technician notification state:', error);
+      notificationReadIdsRef.current = new Set();
+    }
+
+    setNotifications((prev) => mergeNotificationStates(prev, prev, notificationReadIdsRef.current));
+  }, [notificationStorageKey]);
+
+  useEffect(() => {
+    if (!focusedJobId || activeTab !== 'jobs') {
+      return undefined;
+    }
+
+    const scrollTimeout = setTimeout(() => {
+      const element = document.getElementById(`job-card-${focusedJobId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+      }
+    }, 150);
+
+    const clearFocusTimeout = setTimeout(() => {
+      setFocusedJobId(null);
+    }, 4000);
+
+    return () => {
+      clearTimeout(scrollTimeout);
+      clearTimeout(clearFocusTimeout);
+    };
+  }, [focusedJobId, activeTab]);
 
   const handleTabChange = (tabKey) => {
     setSearchParams({ tab: tabKey });
@@ -380,7 +476,51 @@ const TechnicianDashboard = () => {
     }
   };
 
+  const persistReadIds = useCallback(
+    (ids) => {
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return;
+      }
+
+      const readSet = notificationReadIdsRef.current instanceof Set ? notificationReadIdsRef.current : new Set();
+      let hasChanges = false;
+
+      ids.forEach((id) => {
+        if (typeof id === 'string' && id && !readSet.has(id)) {
+          readSet.add(id);
+          hasChanges = true;
+        }
+      });
+
+      if (!hasChanges) {
+        return;
+      }
+
+      notificationReadIdsRef.current = readSet;
+
+      if (typeof window === 'undefined' || !notificationStorageKey) {
+        return;
+      }
+
+      try {
+        window.localStorage.setItem(
+          notificationStorageKey,
+          JSON.stringify(Array.from(readSet))
+        );
+      } catch (error) {
+        console.error('Failed to persist technician notification state:', error);
+      }
+    },
+    [notificationStorageKey]
+  );
+
   const handleMarkNotificationAsRead = (notificationId) => {
+    if (!notificationId) {
+      return;
+    }
+
+    persistReadIds([notificationId]);
+
     setNotifications((prev) =>
       prev.map((notification) =>
         notification.id === notificationId ? { ...notification, read: true } : notification
@@ -389,7 +529,37 @@ const TechnicianDashboard = () => {
   };
 
   const handleMarkAllNotificationsAsRead = () => {
+    const unreadIds = notifications
+      .filter((notification) => !notification.read)
+      .map((notification) => notification.id)
+      .filter(Boolean);
+
+    persistReadIds(unreadIds);
+
     setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })));
+  };
+
+  const handleNotificationNavigate = (notification) => {
+    if (!notification) return;
+
+    if (notification.serviceRequestId) {
+      setFocusedJobId(notification.serviceRequestId);
+    }
+
+    if (notification.targetTab) {
+      setSearchParams((prevParams) => {
+        const entries = Object.fromEntries(prevParams.entries());
+        entries.tab = notification.targetTab;
+        if (notification.serviceRequestId) {
+          entries.focus = notification.serviceRequestId;
+        } else {
+          delete entries.focus;
+        }
+        return entries;
+      });
+    } else if (notification.targetRoute) {
+      navigate(notification.targetRoute);
+    }
   };
 
   const handleWithdraw = () => {
@@ -512,28 +682,6 @@ const TechnicianDashboard = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => handleTabChange(tab.key)}
-              className={`flex items-center space-x-2 rounded-full px-4 py-2 text-sm font-medium transition-smooth ${
-                activeTab === tab.key
-                  ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
-              }`}
-            >
-              <Icon name={tab.icon} size={16} />
-              <span>{tab.label}</span>
-              {tab.badge ? (
-                <span className="rounded-full bg-white/20 px-2 text-xs font-semibold text-white">
-                  {tab.badge}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2 space-y-6">
@@ -569,6 +717,7 @@ const TechnicianDashboard = () => {
                         disableAccept={!isKycApproved}
                         disableReason="Finish verification to accept jobs."
                         technicianLocation={technicianLocation}
+                        isFocused={focusedJobId === job.id}
                       />
                     ))}
                   </div>
@@ -624,6 +773,7 @@ const TechnicianDashboard = () => {
                     disableAccept={!isKycApproved}
                     disableReason="Finish verification to accept jobs."
                     technicianLocation={technicianLocation}
+                    isFocused={focusedJobId === job.id}
                   />
                 ))}
               </div>
@@ -668,6 +818,7 @@ const TechnicianDashboard = () => {
               notifications={notifications}
               onMarkAsRead={handleMarkNotificationAsRead}
               onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+              onNotificationClick={handleNotificationNavigate}
             />
           </div>
         )}

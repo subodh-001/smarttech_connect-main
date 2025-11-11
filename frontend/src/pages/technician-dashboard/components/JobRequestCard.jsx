@@ -51,6 +51,7 @@ const JobRequestCard = ({
   disableAccept = false,
   disableReason = '',
   technicianLocation = null,
+  isFocused = false,
 }) => {
   const getUrgencyColor = (urgency) => {
     switch (urgency) {
@@ -104,7 +105,12 @@ const JobRequestCard = ({
   };
 
   return (
-    <div className="bg-card rounded-lg border border-border p-6 shadow-subtle hover:shadow-elevated transition-smooth">
+    <div
+      id={job?.id ? `job-card-${job.id}` : undefined}
+      className={`bg-card rounded-lg border border-border p-6 shadow-subtle hover:shadow-elevated transition-smooth ${
+        isFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-elevated' : ''
+      }`}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center space-x-3">
           <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">

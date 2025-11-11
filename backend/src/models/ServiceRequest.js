@@ -25,6 +25,29 @@ const MessageSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const CommentSchema = new mongoose.Schema(
+  {
+    authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    authorRole: {
+      type: String,
+      enum: ['technician', 'admin'],
+      default: 'technician',
+    },
+    body: { type: String, required: true },
+    attachments: {
+      type: [
+        {
+          name: { type: String },
+          url: { type: String },
+        },
+      ],
+      default: [],
+    },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
 const ServiceRequestSchema = new mongoose.Schema(
   {
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -59,6 +82,7 @@ const ServiceRequestSchema = new mongoose.Schema(
     images: [String],
     requirements: mongoose.Schema.Types.Mixed,
     messages: { type: [MessageSchema], default: [] },
+    technicianComments: { type: [CommentSchema], default: [] },
   },
   { timestamps: true }
 );

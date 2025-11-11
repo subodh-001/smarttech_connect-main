@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
+import generateReadableId from '../utils/idGenerator.js';
 
 const TechnicianSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    publicId: { type: String, unique: true, index: true },
     specialties: [{ type: String, index: true }],
     yearsOfExperience: { type: Number, default: 0 },
     hourlyRate: { type: Number, default: 0 },
@@ -36,6 +38,13 @@ const TechnicianSchema = new mongoose.Schema(
 );
 
 TechnicianSchema.index({ specialties: 1 });
+
+TechnicianSchema.pre('save', function technicianIdHook(next) {
+  if (!this.publicId) {
+    this.publicId = generateReadableId('TECH');
+  }
+  next();
+});
 
 export default mongoose.model('Technician', TechnicianSchema);
 
