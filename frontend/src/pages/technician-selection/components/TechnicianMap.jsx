@@ -61,15 +61,17 @@ const TechnicianMap = ({
   }, [technicians, userLocation, selectedTechnician]);
 
   return (
-    <InteractiveMap
-      markers={markers}
-      dimmed={isProfileOpen}
-      onMarkerClick={(marker) => {
-        if (marker) {
-          onTechnicianSelect?.(marker);
-        }
-      }}
-    />
+    <div className="h-full w-full">
+      <InteractiveMap
+        markers={markers}
+        dimmed={isProfileOpen}
+        onMarkerClick={(marker) => {
+          if (marker) {
+            onTechnicianSelect?.(marker);
+          }
+        }}
+      />
+    </div>
   );
 };
 

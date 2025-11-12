@@ -462,7 +462,7 @@ const TechnicianSelection = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header user={user} location={userLocation.address} activeService={null} />
-      <main className="pt-16">
+      <main className="pt-16 relative z-0">
         <div className="bg-card border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
@@ -548,14 +548,14 @@ const TechnicianSelection = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className={`${activeView === 'list' ? 'hidden lg:block' : ''}`}>
-              <div className="bg-card border border-border rounded-lg p-4 trust-shadow h-full">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-card border border-border rounded-lg p-4 trust-shadow flex flex-col h-full min-h-[500px]">
+                <div className="flex items-center justify-between mb-4 flex-shrink-0">
                   <div>
                     <h2 className="text-lg font-semibold text-foreground">Nearby Technicians</h2>
                     <p className="text-xs text-muted-foreground mt-1">{availableCountText}</p>
                   </div>
                 </div>
-                <div className="h-96 lg:h-[600px]">
+                <div className="flex-1 min-h-0 relative">
                   <TechnicianMap
                     technicians={filteredTechnicians}
                     selectedTechnician={selectedTechnician}

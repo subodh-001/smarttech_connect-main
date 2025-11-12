@@ -31,6 +31,7 @@ const ActiveJobsSection = ({
   onNavigate,
   onContactCustomer,
   onUpdateStatus,
+  onCollectPayment,
   technicianLocation = null,
 }) => {
   const getStatusColor = (status) => {
@@ -54,7 +55,9 @@ const ActiveJobsSection = ({
   };
 
   const getNextStatusMeta = (status) => {
-    switch (status) {
+    // Normalize status to handle both 'in_progress' and 'in-progress' formats
+    const normalizedStatus = status?.replace('-', '_');
+    switch (normalizedStatus) {
       case 'confirmed':
         return { next: 'in_progress', label: 'Start Job', icon: 'Play', variant: 'secondary' };
       case 'in_progress':
@@ -147,6 +150,29 @@ const ActiveJobsSection = ({
             </div>
           ) : null}
 
+          {/* Payment Status Display */}
+          {job?.paymentStatus && job.paymentStatus !== 'pending' && (
+            <div className="mb-4 p-3 rounded-lg border bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Icon 
+                    name={job.paymentStatus === 'paid' ? 'CheckCircle' : 'Clock'} 
+                    size={16} 
+                    className={job.paymentStatus === 'paid' ? 'text-success' : 'text-warning'} 
+                  />
+                  <span className="text-sm font-medium text-text-primary">
+                    Payment: {job.paymentStatus === 'paid' ? 'Received' : 'Awaiting Payment'}
+                  </span>
+                </div>
+                {job.paymentMethod && (
+                  <span className="text-xs text-text-secondary capitalize">
+                    via {job.paymentMethod.replace('_', ' ')}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <Button
               variant="primary"
@@ -175,10 +201,31 @@ const ActiveJobsSection = ({
             >
               Message
             </Button>
+            {/* Collect Payment Button - Show when job is in_progress or completed */}
+            {((job?.status === 'in_progress' || job?.status === 'in-progress') || job?.status === 'completed') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (onCollectPayment && typeof onCollectPayment === 'function') {
+                    onCollectPayment(job);
+                  } else {
+                    console.error('onCollectPayment handler is not defined or not a function');
+                  }
+                }}
+                iconName="DollarSign"
+                iconPosition="left"
+                disabled={job?.paymentStatus === 'paid'}
+              >
+                {job?.paymentStatus === 'paid' ? 'Payment Received' : 'Collect Payment'}
+              </Button>
+            )}
             <Button
               variant={statusMeta.variant}
               size="sm"
-              disabled={!statusMeta.next}
+              disabled={!statusMeta.next || ((job?.status === 'in_progress' || job?.status === 'in-progress') && job?.paymentStatus !== 'paid')}
               onClick={() => statusMeta.next && onUpdateStatus?.(job, statusMeta.next)}
               iconName={statusMeta.icon}
               iconPosition="left"

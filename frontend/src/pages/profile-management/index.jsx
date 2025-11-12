@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Header from '../../components/ui/Header';
 import Icon from '../../components/AppIcon';
@@ -9,13 +9,27 @@ import PersonalInfoSection from './components/PersonalInfoSection';
 import AddressSection from './components/AddressSection';
 import NotificationSettings from './components/NotificationSettings';
 import SecuritySection from './components/SecuritySection';
+import PayoutSettingsSection from './components/PayoutSettingsSection';
 import { useAuth } from '../../contexts/NewAuthContext';
 
 const ProfileManagement = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, userProfile, loading: authLoading, fetchUserProfile } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('personal');
+  // Get initial tab from URL params, default to 'personal'
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabFromUrl = searchParams.get('tab');
+    return tabFromUrl || 'personal';
+  });
+
+  // Update active tab when URL param changes
+  useEffect(() => {
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams, activeTab]);
   const [profileData, setProfileData] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [notificationSettings, setNotificationSettings] = useState(null);
@@ -40,8 +54,30 @@ const ProfileManagement = () => {
 
     const loadSummary = async () => {
       try {
-        const { data } = await axios.get('/api/dashboard/user');
-        setDashboardSummary(data);
+        const isTechnician = user?.role === 'technician' || user?.type === 'technician';
+        
+        if (isTechnician) {
+          // For technicians, fetch service requests to calculate stats
+          const { data: requestsData } = await axios.get('/api/service-requests');
+          const requests = Array.isArray(requestsData) ? requestsData : [];
+          
+          const activeStatusSet = new Set(['pending', 'confirmed', 'in_progress']);
+          const activeJobs = requests.filter((r) => activeStatusSet.has(r.status)).length;
+          const completedServices = requests.filter((r) => r.status === 'completed').length;
+          const totalBookings = requests.length;
+          
+          setDashboardSummary({
+            stats: {
+              activeJobs,
+              completedServices,
+              totalBookings,
+            },
+          });
+        } else {
+          // For regular users, use the dashboard API
+          const { data } = await axios.get('/api/dashboard/user');
+          setDashboardSummary(data);
+        }
         setError(null);
       } catch (err) {
         console.error('Failed to load dashboard summary:', err);
@@ -60,9 +96,14 @@ const ProfileManagement = () => {
 
     const stats = dashboardSummary?.stats || {};
     const summaryUser = dashboardSummary?.user || {};
-    const memberSince =
-      summaryUser.memberSince ||
-      (userProfile.created_at ? new Date(userProfile.created_at).getFullYear() : '');
+    const isTechnician = user?.role === 'technician' || user?.type === 'technician';
+    
+    // Calculate member since year
+    const memberSince = userProfile.created_at 
+      ? new Date(userProfile.created_at).getFullYear() 
+      : (userProfile.createdAt 
+        ? new Date(userProfile.createdAt).getFullYear() 
+        : new Date().getFullYear());
 
     setProfileData({
       name:
@@ -78,10 +119,12 @@ const ProfileManagement = () => {
       emergencyPhone: userProfile.emergencyPhone || '',
       profilePhoto: userProfile.avatar_url || userProfile.avatarUrl || '',
       isVerified: userProfile.is_active ?? true,
+      role: isTechnician ? 'technician' : (user?.role || user?.type || 'user'),
       stats: {
+        activeJobs: stats.activeJobs ?? 0,
+        completedServices: stats.completedServices ?? 0,
         totalBookings: stats.totalBookings ?? 0,
-        totalSpent: stats.totalSpent ?? 0,
-        memberSince: memberSince || '',
+        memberSince: memberSince || new Date().getFullYear(),
       },
     });
 
@@ -138,9 +181,12 @@ const ProfileManagement = () => {
     }
   }, [userProfile, dashboardSummary, user, notificationSettings, addresses.length]);
 
+  const isTechnician = user?.role === 'technician' || user?.type === 'technician' || userProfile?.role === 'technician';
+  
   const tabs = [
     { id: 'personal', label: 'Personal Info', icon: 'User' },
     { id: 'addresses', label: 'Addresses', icon: 'MapPin' },
+    ...(isTechnician ? [{ id: 'payment', label: 'Payment', icon: 'DollarSign' }] : []),
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
     { id: 'security', label: 'Security', icon: 'Shield' },
   ];
@@ -160,13 +206,31 @@ const ProfileManagement = () => {
   };
 
   const handleProfilePhotoUpdate = async (newPhotoUrl) => {
-    setProfileData((prev) => (prev ? { ...prev, profilePhoto: newPhotoUrl } : prev));
+    // Update UI immediately
+    setProfileData((prev) => (prev ? { ...prev, profilePhoto: newPhotoUrl } : null));
+    
+    // Update user context if available
     try {
-      await axios.put('/api/users/me', { avatarUrl: newPhotoUrl });
-      await fetchUserProfile();
-    } catch (err) {
-      console.error('Failed to update profile photo:', err);
+      const stored = localStorage.getItem('smarttech_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.avatarUrl = newPhotoUrl;
+        localStorage.setItem('smarttech_user', JSON.stringify(parsed));
+      }
+    } catch (storageError) {
+      console.warn('Failed to update localStorage:', storageError);
     }
+    
+    // The ProfileHeader component already handles the backend upload
+    // So we don't need to do it here to avoid double uploads
+    // Just refresh the profile after a delay to get the latest data
+    setTimeout(async () => {
+      try {
+        await fetchUserProfile();
+      } catch (err) {
+        console.error('Failed to refresh profile:', err);
+      }
+    }, 1000);
   };
 
   const handleAddressesUpdate = (updatedAddresses) => {
@@ -207,6 +271,12 @@ const ProfileManagement = () => {
           <AddressSection
             addresses={addresses}
             onUpdateAddresses={handleAddressesUpdate}
+          />
+        );
+      case 'payment':
+        return (
+          <PayoutSettingsSection
+            userProfile={profileData}
           />
         );
       case 'notifications':
@@ -258,7 +328,7 @@ const ProfileManagement = () => {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 relative z-0">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-text-primary">Profile Management</h1>
@@ -293,7 +363,13 @@ const ProfileManagement = () => {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    // Update URL params
+                    const params = new URLSearchParams(searchParams);
+                    params.set('tab', tab.id);
+                    setSearchParams(params);
+                  }}
                   className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-smooth ${
                     activeTab === tab.id
                       ? 'border-primary text-primary'
@@ -318,7 +394,13 @@ const ProfileManagement = () => {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    // Update URL params
+                    const params = new URLSearchParams(searchParams);
+                    params.set('tab', tab.id);
+                    setSearchParams(params);
+                  }}
                   className={`flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium text-sm transition-smooth ${
                     activeTab === tab.id
                       ? 'bg-primary text-primary-foreground'

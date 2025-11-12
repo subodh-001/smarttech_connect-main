@@ -96,6 +96,11 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
         hourlyRate: technician.hourlyRate || 0,
         bio: technician.bio || '',
         certifications: technician.certifications || [],
+        payoutMethod: technician.payoutMethod || 'none',
+        upiId: technician.upiId || null,
+        bankAccountName: technician.bankAccountName || null,
+        bankAccountNumber: technician.bankAccountNumber || null,
+        bankIfscCode: technician.bankIfscCode || null,
       },
       specialties: TECHNICIAN_SPECIALTIES,
     });
@@ -151,6 +156,31 @@ router.put('/me/profile', authMiddleware, async (req, res) => {
 
     if (payload.bio !== undefined) {
       updates.bio = typeof payload.bio === 'string' ? payload.bio.trim().slice(0, 600) : '';
+    }
+
+    // Payout settings
+    if (payload.payoutMethod !== undefined) {
+      const allowedMethods = ['upi', 'bank_transfer', 'none'];
+      if (!allowedMethods.includes(payload.payoutMethod)) {
+        return res.status(400).json({ error: 'Invalid payout method.' });
+      }
+      updates.payoutMethod = payload.payoutMethod;
+    }
+
+    if (payload.upiId !== undefined) {
+      updates.upiId = typeof payload.upiId === 'string' ? payload.upiId.trim() : null;
+    }
+
+    if (payload.bankAccountName !== undefined) {
+      updates.bankAccountName = typeof payload.bankAccountName === 'string' ? payload.bankAccountName.trim() : null;
+    }
+
+    if (payload.bankAccountNumber !== undefined) {
+      updates.bankAccountNumber = typeof payload.bankAccountNumber === 'string' ? payload.bankAccountNumber.trim() : null;
+    }
+
+    if (payload.bankIfscCode !== undefined) {
+      updates.bankIfscCode = typeof payload.bankIfscCode === 'string' ? payload.bankIfscCode.trim().toUpperCase() : null;
     }
 
     if (payload.certifications !== undefined) {

@@ -63,6 +63,12 @@ const AdminDashboard = () => {
     data: null,
     error: null,
   });
+  const [serviceDetailState, setServiceDetailState] = useState({
+    open: false,
+    loading: false,
+    data: null,
+    error: null,
+  });
   const [servicesState, setServicesState] = useState({
     data: [],
     loading: false,
@@ -480,11 +486,43 @@ const AdminDashboard = () => {
   }, [technicianQuery.search]);
 
   useEffect(() => {
-    if (activeTab !== 'services') return;
+    if (activeTab !== 'services') {
+      setServiceDetailState((prev) =>
+        prev.open ? { open: false, loading: false, data: null, error: null } : prev
+      );
+      return;
+    }
+
+    const serviceIdParam = searchParams.get('id');
+    if (!serviceIdParam) {
+      setServiceDetailState((prev) =>
+        prev.open ? { open: false, loading: false, data: null, error: null } : prev
+      );
+      const controller = new AbortController();
+      fetchAdminServices({ signal: controller.signal });
+      return () => controller.abort();
+    }
+
     const controller = new AbortController();
-    fetchAdminServices({ signal: controller.signal });
+    setServiceDetailState({ open: true, loading: true, data: null, error: null });
+
+    axios
+      .get(`/api/admin/services/${serviceIdParam}`, { signal: controller.signal })
+      .then(({ data }) => {
+        setServiceDetailState({ open: true, loading: false, data: data?.service || null, error: null });
+      })
+      .catch((err) => {
+        if (axios.isCancel?.(err) || err?.code === 'ERR_CANCELED') return;
+        setServiceDetailState({
+          open: true,
+          loading: false,
+          data: null,
+          error: err?.response?.data?.error || 'Failed to load service details.',
+        });
+      });
+
     return () => controller.abort();
-  }, [activeTab, fetchAdminServices]);
+  }, [activeTab, paramsKey, fetchAdminServices]);
 
   useEffect(() => {
     setServiceSearchInput(serviceQuery.search);
@@ -927,10 +965,26 @@ const AdminDashboard = () => {
   };
 
   const handleServiceDetails = (serviceId) => {
+    // Close technician profile modal if open
+    if (profileDialog.open) {
+      handleCloseProfileDialog();
+    }
+    // Close user detail drawer if open
+    if (userDetailState.open) {
+      handleCloseUserDetail();
+    }
     const params = new URLSearchParams(paramsKey);
     params.set('tab', 'services');
     params.set('id', serviceId);
     setSearchParams(params);
+  };
+
+  const handleCloseServiceDetail = () => {
+    const params = new URLSearchParams(paramsKey);
+    params.delete('id');
+    params.set('tab', 'services');
+    setSearchParams(params);
+    setServiceDetailState({ open: false, loading: false, data: null, error: null });
   };
   const handleCloseUserDetail = () => {
     const params = new URLSearchParams(paramsKey);
@@ -1153,13 +1207,15 @@ const AdminDashboard = () => {
           )}
         </div>
       </main>
-      <UserDetailDrawer state={userDetailState} onClose={handleCloseUserDetail} />
+      <UserDetailDrawer state={userDetailState} onClose={handleCloseUserDetail} onViewService={handleServiceDetails} />
+      <ServiceDetailDrawer state={serviceDetailState} onClose={handleCloseServiceDetail} />
       {profileDialog.open && (
         <TechnicianProfileModal
           dialog={profileDialog}
           onClose={handleCloseProfileDialog}
           onApprove={() => profileDialog.technician && handleApprovalsApprove(profileDialog.technician)}
           onReject={() => profileDialog.technician && handleApprovalsReject(profileDialog.technician)}
+          onViewService={handleServiceDetails}
         />
       )}
     </div>
@@ -1794,21 +1850,20 @@ const ServicesTab = ({
               <th className="px-4 py-3 text-left font-semibold">Technician</th>
               <th className="px-4 py-3 text-left font-semibold">Budget / Cost</th>
               <th className="px-4 py-3 text-left font-semibold">Updated</th>
-              <th className="px-4 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {loading
               ? Array.from({ length: 6 }).map((_, index) => (
                   <tr key={index} className="animate-pulse">
-                    <td className="px-4 py-4" colSpan={8}>
+                    <td className="px-4 py-4" colSpan={7}>
                       <div className="h-3 w-4/5 rounded bg-muted" />
                     </td>
                   </tr>
                 ))
               : services.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-center text-sm text-text-secondary" colSpan={8}>
+                    <td className="px-4 py-6 text-center text-sm text-text-secondary" colSpan={7}>
                       No services found. Adjust your filters and try again.
                     </td>
                   </tr>
@@ -1862,52 +1917,22 @@ const ServicesTab = ({
                       <td className="px-4 py-3 text-sm text-text-secondary">
                         <div className="space-y-1">
                           {service.budgetMin || service.budgetMax ? (
-                            <p>
+                            <p className="text-xs">
                               Budget: ₹{service.budgetMin || 0} - ₹{service.budgetMax || service.budgetMin || 0}
                             </p>
                           ) : null}
-                          {service.finalCost ? <p>Final: ₹{service.finalCost}</p> : null}
+                          {service.finalCost ? (
+                            <p className="text-xs font-semibold text-success">
+                              Final: ₹{service.finalCost}
+                            </p>
+                          ) : null}
+                          {!service.budgetMin && !service.budgetMax && !service.finalCost ? (
+                            <p className="text-xs text-text-secondary">—</p>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary">
                         {service.updatedAt ? new Date(service.updatedAt).toLocaleString() : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {['pending', 'confirmed'].includes(service.status) ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => onUpdateStatus(service, 'in_progress')}
-                              disabled={updatingServiceId === service.id}
-                              loading={updatingServiceId === service.id}
-                            >
-                              Start
-                            </Button>
-                          ) : null}
-                          {service.status !== 'completed' ? (
-                            <Button
-                              variant="success"
-                              size="sm"
-                              onClick={() => onUpdateStatus(service, 'completed')}
-                              disabled={updatingServiceId === service.id}
-                              loading={updatingServiceId === service.id}
-                            >
-                              Complete
-                            </Button>
-                          ) : null}
-                          {service.status !== 'cancelled' && service.status !== 'completed' ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-error border-error/20 hover:bg-error/10"
-                              onClick={() => onUpdateStatus(service, 'cancelled')}
-                              disabled={updatingServiceId === service.id}
-                            >
-                              Cancel
-                            </Button>
-                          ) : null}
-                        </div>
                       </td>
                     </tr>
                   ))
@@ -2412,7 +2437,7 @@ const SettingsTab = ({
   );
 };
 
-const UserDetailDrawer = ({ state, onClose }) => {
+const UserDetailDrawer = ({ state, onClose, onViewService }) => {
   if (!state?.open) return null;
 
   const { loading, data, error } = state;
@@ -2539,12 +2564,21 @@ const UserDetailDrawer = ({ state, onClose }) => {
                 {recentServices.length ? (
                   <div className="space-y-2 text-xs text-text-secondary">
                     {recentServices.map((service) => (
-                      <div key={service.id} className="rounded-md border border-border px-3 py-2">
+                      <div
+                        key={service.id}
+                        onClick={() => onViewService && service.id && onViewService(service.id)}
+                        className="rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted/50 hover:border-primary/30 transition-colors"
+                      >
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-text-primary">{service.title}</span>
-                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs capitalize">
-                            {service.status?.replace('_', ' ')}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs capitalize">
+                              {service.status?.replace('_', ' ')}
+                            </span>
+                            {onViewService && service.id && (
+                              <Icon name="ExternalLink" size={14} className="text-text-secondary" />
+                            )}
+                          </div>
                         </div>
                         <div className="mt-1 flex flex-wrap gap-3">
                           <span>Category: {service.category}</span>
@@ -2571,10 +2605,188 @@ const UserDetailDrawer = ({ state, onClose }) => {
   );
 };
 
-const TechnicianProfileModal = ({ dialog, onClose, onApprove, onReject }) => {
+const ServiceDetailDrawer = ({ state, onClose }) => {
+  if (!state?.open) return null;
+
+  const { loading, data, error } = state;
+  const service = data || {};
+
+  const formatDateTime = (value) => {
+    if (!value) return '—';
+    try {
+      return new Date(value).toLocaleString();
+    } catch {
+      return '—';
+    }
+  };
+
+  const formatCurrency = (value) => {
+    if (!value && value !== 0) return '—';
+    return `₹${Number(value).toLocaleString('en-IN')}`;
+  };
+
+  const statusClasses = {
+    pending: 'bg-warning/10 text-warning',
+    confirmed: 'bg-info/10 text-info',
+    in_progress: 'bg-primary/10 text-primary',
+    completed: 'bg-success/10 text-success',
+    cancelled: 'bg-error/10 text-error',
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="w-full max-w-4xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary">Service details</h3>
+            <p className="text-sm text-text-secondary">
+              Complete information about this service request.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="p-2 rounded-md text-text-secondary hover:text-text-primary hover:bg-muted"
+            onClick={onClose}
+          >
+            <Icon name="X" size={18} />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+          {loading ? (
+            <LoadingListSkeleton count={4} />
+          ) : error ? (
+            <div className="rounded-md border border-error/20 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <h4 className="text-base font-semibold text-text-primary">{service.title || 'Service Request'}</h4>
+                  <p className="text-sm text-text-secondary">{service.description || 'No description provided'}</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                        statusClasses[service.status] || 'bg-muted text-text-secondary'
+                      }`}
+                    >
+                      {service.status?.replace('_', ' ') || 'Unknown'}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-1 text-xs font-medium capitalize text-text-secondary">
+                      {service.category || 'Uncategorized'}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-1 text-xs font-medium capitalize text-text-secondary">
+                      {service.priority || 'Medium'} Priority
+                    </span>
+                  </div>
+                </div>
+                <div className="grid gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-xs text-text-secondary">
+                  <div className="flex items-center justify-between">
+                    <span>Created</span>
+                    <span>{formatDateTime(service.createdAt)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Last updated</span>
+                    <span>{formatDateTime(service.updatedAt)}</span>
+                  </div>
+                  {service.scheduledDate ? (
+                    <div className="flex items-center justify-between">
+                      <span>Scheduled</span>
+                      <span>{formatDateTime(service.scheduledDate)}</span>
+                    </div>
+                  ) : null}
+                  {service.completionDate ? (
+                    <div className="flex items-center justify-between">
+                      <span>Completed</span>
+                      <span>{formatDateTime(service.completionDate)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border border-border bg-muted/30 px-4 py-4">
+                  <h4 className="text-sm font-semibold text-text-primary mb-3">Customer Information</h4>
+                  <div className="space-y-2 text-xs text-text-secondary">
+                    <p>
+                      <span className="font-medium">Name:</span> {service.customer?.name || '—'}
+                    </p>
+                    {service.customer?.email ? (
+                      <p>
+                        <span className="font-medium">Email:</span> {service.customer.email}
+                      </p>
+                    ) : null}
+                    {service.customer?.code ? (
+                      <p>
+                        <span className="font-medium">ID:</span> {service.customer.code}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted/30 px-4 py-4">
+                  <h4 className="text-sm font-semibold text-text-primary mb-3">Technician Information</h4>
+                  <div className="space-y-2 text-xs text-text-secondary">
+                    <p>
+                      <span className="font-medium">Name:</span> {service.technician?.name || 'Unassigned'}
+                    </p>
+                    {service.technician?.email ? (
+                      <p>
+                        <span className="font-medium">Email:</span> {service.technician.email}
+                      </p>
+                    ) : null}
+                    {service.technician?.code ? (
+                      <p>
+                        <span className="font-medium">ID:</span> {service.technician.code}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-4">
+                <h4 className="text-sm font-semibold text-text-primary mb-3">Budget & Cost</h4>
+                <div className="grid gap-2 md:grid-cols-3 text-xs text-text-secondary">
+                  {service.budgetMin || service.budgetMax ? (
+                    <div>
+                      <span className="font-medium">Budget Range:</span>{' '}
+                      {formatCurrency(service.budgetMin || 0)} - {formatCurrency(service.budgetMax || service.budgetMin || 0)}
+                    </div>
+                  ) : null}
+                  {service.finalCost ? (
+                    <div>
+                      <span className="font-medium text-success">Final Cost:</span> {formatCurrency(service.finalCost)}
+                    </div>
+                  ) : null}
+                  {service.estimatedDuration ? (
+                    <div>
+                      <span className="font-medium">Estimated Duration:</span> {service.estimatedDuration} minutes
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {service.location ? (
+                <div className="rounded-lg border border-border bg-muted/30 px-4 py-4">
+                  <h4 className="text-sm font-semibold text-text-primary mb-3">Location</h4>
+                  <p className="text-xs text-text-secondary">{service.location || '—'}</p>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TechnicianProfileModal = ({ dialog, onClose, onApprove, onReject, onViewService }) => {
   const { loading, error, details, recentServices, technician } = dialog;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="w-full max-w-3xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
@@ -2647,16 +2859,22 @@ const TechnicianProfileModal = ({ dialog, onClose, onApprove, onReject }) => {
                     {recentServices.map((service) => (
                       <div
                         key={service.id}
-                        className="rounded-md border border-border px-3 py-2 flex items-center justify-between"
+                        onClick={() => onViewService && service.id && onViewService(service.id)}
+                        className="rounded-md border border-border px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-muted/50 hover:border-primary/30 transition-colors"
                       >
-                        <div>
+                        <div className="flex-1">
                           <p className="text-sm font-medium text-text-primary">{service.title}</p>
                           <p className="text-xs text-text-secondary">
                             Status: {service.status?.replace('_', ' ')} • Customer: {service.customer || '—'}
                           </p>
                         </div>
-                        <div className="text-xs text-text-secondary text-right">
-                          {service.updatedAt ? new Date(service.updatedAt).toLocaleString() : '—'}
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-text-secondary text-right">
+                            {service.updatedAt ? new Date(service.updatedAt).toLocaleString() : '—'}
+                          </div>
+                          {onViewService && service.id && (
+                            <Icon name="ExternalLink" size={14} className="text-text-secondary" />
+                          )}
                         </div>
                       </div>
                     ))}

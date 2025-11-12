@@ -4,6 +4,8 @@ import axios from 'axios';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import Icon from '../../components/AppIcon';
+import ProfileHeader from '../profile-management/components/ProfileHeader';
 import { useAuth } from '../../contexts/NewAuthContext';
 import {
   Mail,
@@ -125,6 +127,7 @@ const UserProfile = () => {
   const [expertiseSaving, setExpertiseSaving] = useState(false);
   const [expertiseMessage, setExpertiseMessage] = useState(null);
   const [expertiseError, setExpertiseError] = useState(null);
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
   useEffect(() => {
     if (!loading && user && !userProfile) {
@@ -136,6 +139,7 @@ const UserProfile = () => {
     if (userProfile) {
       setProfileForm(buildProfileForm(userProfile));
       setSettingsForm(buildSettingsForm(userProfile));
+      setProfilePhoto(userProfile.avatarUrl || userProfile.avatar_url || '');
     }
   }, [userProfile]);
 
@@ -487,6 +491,47 @@ const UserProfile = () => {
     }));
   };
 
+  const handleProfilePhotoUpdate = async (newPhotoUrl) => {
+    setProfilePhoto(newPhotoUrl);
+    try {
+      await axios.put('/api/users/me', { avatarUrl: newPhotoUrl });
+      await fetchUserProfile();
+    } catch (err) {
+      console.error('Failed to update profile photo:', err);
+    }
+  };
+
+  const profileHeaderData = useMemo(() => {
+    if (!profileForm) {
+      return {
+        name: 'User',
+        email: '',
+        phone: '',
+        profilePhoto: profilePhoto || '',
+        isVerified: true,
+        stats: {
+          totalBookings: 0,
+          completedServices: 0,
+          totalSpent: 0,
+          memberSince: '',
+        },
+      };
+    }
+    return {
+      name: profileForm.fullName || 'User',
+      email: profileForm.email || '',
+      phone: profileForm.phone || '',
+      profilePhoto: profilePhoto || '',
+      isVerified: userProfile?.isActive ?? true,
+      stats: {
+        totalBookings: stats?.totalBookings ?? 0,
+        completedServices: stats?.completedServices ?? 0,
+        totalSpent: stats?.totalSpent ?? 0,
+        memberSince: memberSince ?? '',
+      },
+    };
+  }, [profileForm, profilePhoto, userProfile, stats, memberSince]);
+
   const kycStatus = isTechnician ? kycInfo?.status || 'not_submitted' : null;
   const kycMeta = kycStatus ? kycStatusConfig[kycStatus] : null;
   const canSubmitKyc = !!kycFiles.governmentId && kycStatus !== 'under_review';
@@ -525,46 +570,35 @@ const UserProfile = () => {
     <div className="min-h-screen bg-slate-50 pb-12">
       <Header user={user} />
       <div className="mx-auto mt-16 w-full max-w-5xl px-4 sm:px-6 lg:px-8">
-        <section className="rounded-2xl border border-slate-200 bg-white px-6 py-6 shadow-sm sm:px-8 sm:py-7">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-lg font-semibold text-white sm:h-20 sm:w-20">
-                {(profileForm.fullName || profileForm.email)?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-slate-900">
-                  {profileForm.fullName || 'Your account'}
-                </h1>
-                <p className="flex items-center gap-2 text-sm text-slate-500">
-                  <Mail size={16} className="text-slate-400" />
-                  {profileForm.email}
-                </p>
-                {profileForm.phone ? (
-                  <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                    <Phone size={16} className="text-slate-400" />
-                    {profileForm.phone}
-                  </p>
-                ) : null}
-                {isTechnician && kycMeta ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${kycMeta.badgeClass}`}
-                    >
-                      {kycMeta.badgeLabel}
-                    </span>
-                    <span className="text-xs text-slate-500">{kycMeta.title}</span>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2 sm:gap-3">
-              <StatBadge icon={Activity} label="Active jobs" value={activeServices.length} />
-              <StatBadge icon={CheckCircle2} label="Completed" value={stats?.completedServices ?? 0} />
-              <StatBadge icon={Calendar} label="Total bookings" value={stats?.totalBookings ?? 0} />
-              <StatBadge icon={Clock} label="Member since" value={memberSince ?? '—'} />
+        {/* Quick Access to Profile Management */}
+        <div className="mb-6 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+          <div className="flex items-center space-x-3">
+            <Icon name="Settings" size={20} className="text-blue-600" />
+            <div>
+              <p className="text-sm font-medium text-blue-900">Manage Profile Settings</p>
+              <p className="text-xs text-blue-700">
+                {isTechnician 
+                  ? 'Access payment settings, addresses, and more' 
+                  : 'Access addresses, notifications, and security settings'}
+              </p>
             </div>
           </div>
-        </section>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => navigate('/profile-management')}
+            iconName="ArrowRight"
+            iconPosition="right"
+          >
+            Go to Settings
+          </Button>
+        </div>
+        
+        {/* Profile Header with Photo Change */}
+        <ProfileHeader
+          userProfile={profileHeaderData}
+          onProfilePhotoUpdate={handleProfilePhotoUpdate}
+        />
 
         {isTechnician && kycStatus && (
           <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -217,6 +217,10 @@ const formatServiceRequest = (request) => {
     budgetMin: doc.budgetMin,
     budgetMax: doc.budgetMax,
     finalCost: doc.finalCost,
+    paymentStatus: doc.paymentStatus || 'pending',
+    paymentMethod: doc.paymentMethod || null,
+    paymentNotes: doc.paymentNotes || null,
+    paymentConfirmedAt: doc.paymentConfirmedAt || null,
     reviewRating: doc.reviewRating,
     reviewComment: doc.reviewComment,
     cancellationReason: doc.cancellationReason,
@@ -415,6 +419,26 @@ router.patch('/:id/status', authMiddleware, async (req, res) => {
         rescheduleReason,
       };
     }
+
+    // Payment status updates
+    if (req.body.paymentStatus !== undefined) {
+      const allowedPaymentStatuses = ['pending', 'awaiting_payment', 'paid', 'failed'];
+      if (allowedPaymentStatuses.includes(req.body.paymentStatus)) {
+        request.paymentStatus = req.body.paymentStatus;
+        if (req.body.paymentStatus === 'paid') {
+          request.paymentConfirmedAt = new Date();
+        }
+      }
+    }
+
+    if (req.body.paymentMethod !== undefined) {
+      request.paymentMethod = typeof req.body.paymentMethod === 'string' ? req.body.paymentMethod.trim() : null;
+    }
+
+    if (req.body.paymentNotes !== undefined) {
+      request.paymentNotes = typeof req.body.paymentNotes === 'string' ? req.body.paymentNotes.trim() : null;
+    }
+
     if (status === 'completed') {
       request.completionDate = new Date();
     }

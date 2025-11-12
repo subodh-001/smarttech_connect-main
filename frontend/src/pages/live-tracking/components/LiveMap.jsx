@@ -73,7 +73,7 @@ const LiveMap = ({
   return (
     <div
       className={`relative rounded-lg border border-border bg-card/60 backdrop-blur ${
-        isFullscreen ? 'fixed inset-0 z-50' : 'h-96 lg:h-[500px]'
+        isFullscreen ? 'fixed inset-0 z-[999]' : 'h-96 lg:h-[500px]'
       }`}
     >
       <InteractiveMap

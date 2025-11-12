@@ -4,6 +4,7 @@ import { useAuth } from "./contexts/NewAuthContext";
 import ScrollToTop from "./components/ScrollToTop";
 import ErrorBoundary from "./components/ErrorBoundary";
 import NotFound from "./pages/NotFound";
+import ProfileManagementRedirect from "./components/ProfileManagementRedirect";
 import UserLogin from './pages/user-login';
 import LiveTracking from './pages/live-tracking';
 import UserDashboard from './pages/user-dashboard';
@@ -46,7 +47,7 @@ const Routes = () => {
         <Route path="/chat-communication" element={<ProtectedRoute><ChatCommunication /></ProtectedRoute>} />
         <Route
           path="/profile-management"
-          element={<Navigate to="/user-profile" replace />}
+          element={<ProfileManagementRedirect />}
         />
         <Route path="/admin-dashboard" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />

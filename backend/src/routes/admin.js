@@ -66,15 +66,18 @@ const toPlainServiceDetailed = (doc) => {
   const base = toPlainService(doc);
   return {
     ...base,
-    description: doc.description,
-    priority: doc.priority,
-    location: doc.locationAddress,
-    scheduledDate: doc.scheduledDate,
-    completionDate: doc.completionDate,
-    estimatedDuration: doc.estimatedDuration,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-    category: doc.category,
+    description: doc.description || null,
+    priority: doc.priority || null,
+    location: doc.locationAddress || null,
+    scheduledDate: doc.scheduledDate || null,
+    completionDate: doc.completionDate || null,
+    estimatedDuration: doc.estimatedDuration || null,
+    createdAt: doc.createdAt || null,
+    updatedAt: doc.updatedAt || null,
+    category: doc.category || null,
+    budgetMin: doc.budgetMin ?? null,
+    budgetMax: doc.budgetMax ?? null,
+    finalCost: doc.finalCost ?? null,
   };
 };
 
@@ -914,6 +917,33 @@ router.get('/services', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Failed to list services:', error);
     res.status(500).json({ error: 'Failed to load services.' });
+  }
+});
+
+router.get('/services/:id', authMiddleware, async (req, res) => {
+  if (!ensureAdmin(req, res)) return;
+
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid service id.' });
+    }
+
+    const serviceDoc = await ServiceRequest.findById(id)
+      .populate('customerId', 'fullName email phone publicId')
+      .populate('technicianId', 'fullName email phone publicId')
+      .lean();
+
+    if (!serviceDoc) {
+      return res.status(404).json({ error: 'Service request not found.' });
+    }
+
+    res.json({
+      service: toPlainServiceDetailed(serviceDoc),
+    });
+  } catch (error) {
+    console.error('Failed to get service:', error);
+    res.status(500).json({ error: 'Failed to load service details.' });
   }
 });
 

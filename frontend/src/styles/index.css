@@ -10,3 +10,14 @@ body {
   font-family: inherit;
   margin: unset;
 }
+
+/* Ensure Leaflet controls stay below header (z-index 1000) */
+.leaflet-control-container,
+.leaflet-control {
+  z-index: 999 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 999 !important;
+}

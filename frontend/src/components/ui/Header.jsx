@@ -153,7 +153,7 @@ const Header = ({
     ) : null;
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-slate-800 bg-slate-950/95 backdrop-blur-xl shadow-lg shadow-slate-950/30">
+    <header className="fixed top-0 left-0 right-0 z-[1000] border-b border-slate-800 bg-slate-950/95 backdrop-blur-xl shadow-lg shadow-slate-950/30">
       <div className="flex h-16 items-center justify-between px-4 lg:px-6">
         <Link
           to={
@@ -228,17 +228,61 @@ const Header = ({
                 onClick={handleProfileClick}
                 className="flex items-center space-x-2 rounded-md p-2 text-slate-300 hover:bg-slate-800/80 hover:text-white"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium text-white">
-                  {(user?.fullName || user?.name || 'U')?.charAt(0)}
-                </div>
+                {user?.avatarUrl || user?.avatar_url ? (
+                  <div className="relative h-8 w-8 rounded-full overflow-hidden border-2 border-primary/30">
+                    <img
+                      src={user.avatarUrl || user.avatar_url}
+                      alt={user?.fullName || user?.name || 'User'}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextElementSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div className="hidden h-full w-full items-center justify-center rounded-full bg-primary text-sm font-medium text-white">
+                      {(user?.fullName || user?.name || 'U')?.charAt(0)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium text-white">
+                    {(user?.fullName || user?.name || 'U')?.charAt(0)}
+                  </div>
+                )}
                 <Icon name="ChevronDown" size={16} className="text-slate-500" />
               </button>
 
               {isProfileDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-60 rounded-lg border border-slate-700 bg-slate-900 shadow-xl shadow-black/50">
                   <div className="border-b border-slate-800 p-3">
-                    <p className="text-sm font-medium text-white">{user?.fullName || user?.name || 'User'}</p>
-                    <p className="text-xs text-slate-400">{user?.email || 'user@example.com'}</p>
+                    <div className="flex items-center space-x-3">
+                      {user?.avatarUrl || user?.avatar_url ? (
+                        <div className="relative h-10 w-10 rounded-full overflow-hidden border-2 border-primary/30 flex-shrink-0">
+                          <img
+                            src={user.avatarUrl || user.avatar_url}
+                            alt={user?.fullName || user?.name || 'User'}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextElementSibling.style.display = 'flex';
+                            }}
+                          />
+                          <div className="hidden h-full w-full items-center justify-center rounded-full bg-primary text-sm font-medium text-white">
+                            {(user?.fullName || user?.name || 'U')?.charAt(0)}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-medium text-white flex-shrink-0">
+                          {(user?.fullName || user?.name || 'U')?.charAt(0)}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{user?.fullName || user?.name || 'User'}</p>
+                        <p className="text-xs text-slate-400 truncate">{user?.email || 'user@example.com'}</p>
+                        {(user?.role === 'technician' || user?.type === 'technician') && (
+                          <p className="text-xs text-primary mt-0.5">Technician</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="py-1">
                     {role === 'technician' ? (

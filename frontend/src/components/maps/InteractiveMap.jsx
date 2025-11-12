@@ -107,12 +107,28 @@ const MapEffects = ({
 }) => {
   const map = useMap();
   const initialized = useRef(false);
+  const resizeObserverRef = useRef(null);
 
   React.useEffect(() => {
     if (!initialized.current) {
       initialized.current = true;
       if (typeof onReady === 'function') {
         onReady(map);
+      }
+      // Invalidate size after a short delay to ensure container is rendered
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 100);
+      
+      // Ensure Leaflet controls stay below header (z-index 1000)
+      const container = map.getContainer();
+      if (container) {
+        const controls = container.querySelectorAll('.leaflet-control-container, .leaflet-control');
+        controls.forEach((control) => {
+          if (control instanceof HTMLElement) {
+            control.style.zIndex = '999';
+          }
+        });
       }
     }
   }, [map, onReady]);
@@ -128,6 +144,35 @@ const MapEffects = ({
       map.fitBounds(bounds, { padding: [36, 36], maxZoom: 16 });
     }
   }, [bounds, fitToBounds, map]);
+
+  React.useEffect(() => {
+    // Handle window resize
+    const handleResize = () => {
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 100);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    // Observe container size changes
+    const container = map.getContainer();
+    if (container && typeof ResizeObserver !== 'undefined') {
+      resizeObserverRef.current = new ResizeObserver(() => {
+        setTimeout(() => {
+          map.invalidateSize();
+        }, 50);
+      });
+      resizeObserverRef.current.observe(container);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    };
+  }, [map]);
 
   return null;
 };
@@ -231,10 +276,11 @@ const InteractiveMap = forwardRef(
     return (
       <div
         className={clsx(
-          'interactive-map relative h-full w-full overflow-hidden rounded-xl',
+          'interactive-map relative h-full w-full overflow-hidden rounded-xl z-0',
           dimmed && 'pointer-events-none scale-[0.99] opacity-60 blur-[0.5px] transition-all duration-200 ease-out',
           className,
         )}
+        style={{ zIndex: 0 }}
       >
         <MapContainer
           center={derivedCenter}

@@ -71,6 +71,14 @@ const ServiceRequestSchema = new mongoose.Schema(
     budgetMin: Number,
     budgetMax: Number,
     finalCost: Number,
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'awaiting_payment', 'paid', 'failed'],
+      default: 'pending',
+    },
+    paymentMethod: { type: String }, // 'upi', 'cash', 'card', 'bank_transfer'
+    paymentNotes: { type: String },
+    paymentConfirmedAt: { type: Date },
     reviewRating: Number,
     reviewComment: { type: String },
     cancellationReason: { type: String },

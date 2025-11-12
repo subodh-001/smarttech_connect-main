@@ -9,6 +9,7 @@ import EarningsPanel from './components/EarningsPanel';
 import CalendarView from './components/CalendarView';
 import NotificationCenter from './components/NotificationCenter';
 import QuickActions from './components/QuickActions';
+import PaymentCollectionModal from './components/PaymentCollectionModal';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../contexts/NewAuthContext';
@@ -220,6 +221,9 @@ const mapActiveRequest = (request) => ({
   customerPhone: request.customer?.phone || '—',
   eta: request.status === 'in_progress' ? 'On site' : request.status === 'confirmed' ? 'Scheduled' : '—',
   customerRating: request.reviewRating ?? '—',
+  paymentStatus: request.paymentStatus || 'pending',
+  paymentMethod: request.paymentMethod || null,
+  technician: request.technician || null,
 });
 
 const mapAppointment = (request) => ({
@@ -251,6 +255,8 @@ const TechnicianDashboard = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState(null);
   const [focusedJobId, setFocusedJobId] = useState(null);
+  const [paymentModalJob, setPaymentModalJob] = useState(null);
+  const [technicianPayoutInfo, setTechnicianPayoutInfo] = useState(null);
 
   const notificationReadIdsRef = useRef(new Set());
   const notificationStorageKey = useMemo(() => {
@@ -287,6 +293,21 @@ const TechnicianDashboard = () => {
     } catch (error) {
       console.error('Failed to fetch technician KYC status:', error);
       setKycInfo({ status: 'not_submitted' });
+    }
+  }, [isAuthenticated]);
+
+  const fetchTechnicianPayoutInfo = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const { data } = await axios.get('/api/technicians/me/profile');
+      if (data?.technician) {
+        setTechnicianPayoutInfo({
+          payoutMethod: data.technician.payoutMethod || 'none',
+          upiId: data.technician.upiId || null,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch technician payout info:', error);
     }
   }, [isAuthenticated]);
 
@@ -331,7 +352,8 @@ const TechnicianDashboard = () => {
 
   useEffect(() => {
     fetchKycInfo();
-  }, [fetchKycInfo]);
+    fetchTechnicianPayoutInfo();
+  }, [fetchKycInfo, fetchTechnicianPayoutInfo]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -460,6 +482,33 @@ const TechnicianDashboard = () => {
 
   const handleDeclineJob = (jobId) => {
     setJobRequests((prev) => prev.filter((job) => job.id !== jobId));
+  };
+
+  const handleCollectPayment = useCallback((job) => {
+    if (!job) {
+      console.error('No job provided to handleCollectPayment');
+      return;
+    }
+    console.log('Opening payment modal for job:', job.id, job.title);
+    setPaymentModalJob(job);
+  }, []);
+
+  const handleConfirmPayment = async () => {
+    if (!paymentModalJob) return;
+    
+    try {
+      await axios.patch(`/api/service-requests/${paymentModalJob.id}/status`, {
+        paymentStatus: 'paid',
+        paymentMethod: 'upi',
+      });
+      
+      // Refresh dashboard data
+      await fetchDashboardData();
+      setPaymentModalJob(null);
+    } catch (error) {
+      console.error('Failed to confirm payment:', error);
+      alert('Failed to update payment status. Please try again.');
+    }
   };
 
   const handleUpdateJobStatus = async (job, nextStatus) => {
@@ -635,7 +684,7 @@ const TechnicianDashboard = () => {
     <div className="min-h-screen bg-background">
       <Header messageBadgeCount={unreadNotifications} bookingBadgeCount={newJobRequests} onToggleSidebar={() => {}} />
 
-      <div className="container mx-auto px-4 pt-24 pb-6">
+      <div className="container mx-auto px-4 pt-16 pb-6 relative z-0">
         {!isKycApproved && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4 text-amber-900 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -789,6 +838,7 @@ const TechnicianDashboard = () => {
               onNavigate={handleNavigateToJob}
               onContactCustomer={handleContactCustomer}
               onUpdateStatus={handleUpdateJobStatus}
+              onCollectPayment={handleCollectPayment}
               technicianLocation={technicianLocation}
             />
           </div>
@@ -823,6 +873,15 @@ const TechnicianDashboard = () => {
           </div>
         )}
       </div>
+
+      {/* Payment Collection Modal */}
+      <PaymentCollectionModal
+        isOpen={!!paymentModalJob}
+        onClose={() => setPaymentModalJob(null)}
+        job={paymentModalJob}
+        technicianUpiId={technicianPayoutInfo?.upiId || null}
+        onConfirmPayment={handleConfirmPayment}
+      />
     </div>
   );
 };

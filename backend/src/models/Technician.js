@@ -32,7 +32,16 @@ const TechnicianSchema = new mongoose.Schema(
     kycSelfieDocumentOriginalName: { type: String },
     kycSubmittedAt: { type: Date },
     kycReviewedAt: { type: Date },
-    kycFeedback: { type: String }
+    kycFeedback: { type: String },
+    payoutMethod: {
+      type: String,
+      enum: ['upi', 'bank_transfer', 'none'],
+      default: 'none',
+    },
+    upiId: { type: String },
+    bankAccountName: { type: String },
+    bankAccountNumber: { type: String },
+    bankIfscCode: { type: String },
   },
   { timestamps: true }
 );

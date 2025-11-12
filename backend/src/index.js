@@ -27,7 +27,8 @@ const app = express();
 app.set('etag', false); // disable ETag to avoid stale 304 responses for API clients
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+// Increase JSON body size limit to 5MB to handle base64 image uploads
+app.use(express.json({ limit: '5mb' }));
 app.use(morgan('dev'));
 app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 

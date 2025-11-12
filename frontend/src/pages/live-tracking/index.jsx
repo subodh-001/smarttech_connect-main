@@ -122,12 +122,21 @@ const deriveServicePhases = (status, request) => {
   return { phases, currentPhase };
 };
 
-const buildTechnicianInfo = (request, technicianProfile) => {
+const buildTechnicianInfo = (request, technicianProfile, userLocation = null) => {
   const userInfo = request?.technician || {};
   const profile = technicianProfile || {};
   const lastLocation = profile?.lastLocation || null;
   const jobLocation = request?.locationCoordinates || null;
-  const distanceKm = computeDistanceKm(lastLocation, jobLocation);
+  
+  // Calculate distance: technician to job location (preferred) or user location to job location (fallback)
+  let distanceKm = null;
+  if (lastLocation && jobLocation) {
+    distanceKm = computeDistanceKm(lastLocation, jobLocation);
+  } else if (userLocation && jobLocation) {
+    // Fallback: use user location if technician location not available
+    distanceKm = computeDistanceKm(userLocation, jobLocation);
+  }
+  
   const etaMinutes =
     distanceKm != null ? Math.max(5, Math.round((distanceKm / 20) * 60)) : null;
 
@@ -354,7 +363,9 @@ const LiveTracking = () => {
         }
       }
 
-      const info = buildTechnicianInfo(requestDoc, technicianProfile);
+      // Get current userLocation from state
+      const currentUserLocation = userLocation?.lat && userLocation?.lng ? userLocation : null;
+      const info = buildTechnicianInfo(requestDoc, technicianProfile, currentUserLocation);
       setTechnicianInfo(info);
       setTechnicianLocation(
         info?.lastLocation || requestDoc?.locationCoordinates || null,
@@ -377,7 +388,7 @@ const LiveTracking = () => {
     } finally {
       setLoading(false);
     }
-  }, [resolvedRequestId, fetchChatMessages]);
+  }, [resolvedRequestId, fetchChatMessages, userLocation]);
 
   useEffect(() => {
     fetchLiveData();
@@ -474,8 +485,17 @@ const LiveTracking = () => {
   }, [serviceRequest]);
 
   const handleCall = useCallback(() => {
-    if (!technicianInfo?.phone) return;
-    window.open(`tel:${technicianInfo.phone}`, '_self');
+    if (!technicianInfo?.phone) {
+      alert('Technician phone number is not available.');
+      return;
+    }
+    // Clean phone number and use tel: protocol
+    const phoneNumber = technicianInfo.phone.replace(/[^0-9+]/g, '');
+    if (phoneNumber) {
+      window.location.href = `tel:${phoneNumber}`;
+    } else {
+      alert('Invalid phone number format.');
+    }
   }, [technicianInfo]);
 
   const handleChat = useCallback(() => {
@@ -596,7 +616,7 @@ const LiveTracking = () => {
           activeService={serviceRequest}
           messageBadgeCount={chatUnreadCount}
         />
-        <main className="pt-24 flex items-center justify-center">
+        <main className="pt-16 relative z-0 flex items-center justify-center">
           <div className="text-center space-y-4">
             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
             <p className="text-muted-foreground">Loading your live tracking data…</p>
@@ -610,7 +630,7 @@ const LiveTracking = () => {
     return (
       <div className="min-h-screen bg-background">
         <Header user={user} location={currentLocationLabel} messageBadgeCount={chatUnreadCount} />
-        <main className="pt-24">
+        <main className="pt-16 relative z-0">
           <div className="max-w-xl mx-auto text-center space-y-4">
             <h1 className="text-2xl font-semibold text-foreground">
               No service to track yet
@@ -635,7 +655,7 @@ const LiveTracking = () => {
         activeService={serviceRequest}
         messageBadgeCount={chatUnreadCount}
       />
-      <main className="pt-16">
+      <main className="pt-16 relative z-0">
         {error ? (
           <div className="bg-error/10 border border-error/20 text-error px-4 py-3 text-sm text-center">
             {error}
