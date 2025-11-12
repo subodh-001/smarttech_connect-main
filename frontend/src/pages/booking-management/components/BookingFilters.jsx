@@ -34,10 +34,10 @@ const BookingFilters = ({ onFilterChange, onClearFilters }) => {
 
   const priceRangeOptions = [
     { value: '', label: 'Any Price' },
-    { value: '0-50', label: '$0 - $50' },
-    { value: '50-100', label: '$50 - $100' },
-    { value: '100-200', label: '$100 - $200' },
-    { value: '200+', label: '$200+' }
+    { value: '0-50', label: '₹0 - ₹50' },
+    { value: '50-100', label: '₹50 - ₹100' },
+    { value: '100-200', label: '₹100 - ₹200' },
+    { value: '200+', label: '₹200+' }
   ];
 
   const statusOptions = [

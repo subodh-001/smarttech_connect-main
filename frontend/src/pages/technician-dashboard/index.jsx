@@ -226,16 +226,24 @@ const mapActiveRequest = (request) => ({
   technician: request.technician || null,
 });
 
-const mapAppointment = (request) => ({
-  id: request.id,
-  title: request.title,
-  customerName: request.customer?.name || 'Customer',
-  date: request.scheduledDate,
-  time: request.scheduledDate ? formatClockTime(request.scheduledDate) : '—',
-  duration: minutesToDuration(request.estimatedDuration),
-  location: request.locationAddress,
-  amount: request.finalCost ?? request.budgetMax ?? request.budgetMin ?? 0,
-});
+const mapAppointment = (request) => {
+  // Use scheduledDate if available, otherwise use createdAt or updatedAt
+  const appointmentDate = request.scheduledDate || request.createdAt || request.updatedAt;
+  const dateObj = appointmentDate ? new Date(appointmentDate) : new Date();
+  
+  return {
+    id: request.id,
+    title: request.title,
+    customerName: request.customer?.name || 'Customer',
+    date: dateObj,
+    time: request.scheduledDate ? formatClockTime(request.scheduledDate) : (request.createdAt ? formatClockTime(request.createdAt) : '—'),
+    duration: minutesToDuration(request.estimatedDuration),
+    location: request.locationAddress,
+    amount: request.finalCost ?? request.budgetMax ?? request.budgetMin ?? 0,
+    status: request.status,
+    category: request.category,
+  };
+};
 
 const TechnicianDashboard = () => {
   const navigate = useNavigate();
@@ -332,13 +340,13 @@ const TechnicianDashboard = () => {
       setJobRequests(availableRaw.map(mapAvailableRequest));
       setActiveJobs(activeRaw.map(mapActiveRequest));
       setCompletedJobs(completedRaw);
-      setAppointments(
-        assignedRaw
-          .filter((request) =>
-            request.scheduledDate && ['confirmed', 'in_progress'].includes(request.status)
-          )
-          .map(mapAppointment)
-      );
+          // Map all assigned requests to appointments (not just confirmed/in_progress)
+          // Include all statuses so technicians can see their full schedule
+          const allAppointments = assignedRaw
+            .filter((request) => request.status !== 'cancelled') // Exclude cancelled
+            .map(mapAppointment);
+          
+          setAppointments(allAppointments);
       const generatedNotifications = buildNotifications(availableRaw, activeRaw, completedRaw);
       setNotifications((prev) => mergeNotificationStates(generatedNotifications, prev, notificationReadIdsRef.current));
       setEarningsData(calculateEarnings(completedRaw, assignedRaw));
@@ -855,9 +863,18 @@ const TechnicianDashboard = () => {
             <CalendarView
               appointments={appointments}
               onBlockTime={handleBlockTime}
-              onManageAppointment={(appointmentId, action) =>
-                console.log('Manage appointment', appointmentId, action)
-              }
+              onManageAppointment={(appointmentId, action) => {
+                if (action === 'view') {
+                  // Navigate to active jobs tab and focus on this job
+                  setSearchParams({ tab: 'active', focus: appointmentId });
+                  setFocusedJobId(appointmentId);
+                } else if (action === 'reschedule') {
+                  // For now, just show a message - can be enhanced later
+                  alert('Reschedule functionality coming soon');
+                } else {
+                  console.log('Manage appointment', appointmentId, action);
+                }
+              }}
             />
           </div>
         )}

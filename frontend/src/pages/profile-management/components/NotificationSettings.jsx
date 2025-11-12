@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import Button from '../../../components/ui/Button';
 import Icon from '../../../components/AppIcon';
@@ -7,6 +8,8 @@ const NotificationSettings = ({ settings, onUpdateSettings }) => {
   const [localSettings, setLocalSettings] = useState(settings);
   const [isLoading, setIsLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -23,16 +26,46 @@ const NotificationSettings = ({ settings, onUpdateSettings }) => {
     };
     setLocalSettings(updatedSettings);
     setHasChanges(true);
+    setError(null);
   };
 
   const handleSaveSettings = async () => {
     setIsLoading(true);
-    // Mock API call
-    setTimeout(() => {
-      onUpdateSettings(localSettings);
+    setError(null);
+    setSuccess(false);
+    
+    try {
+      // Prepare data for backend
+      const delivery = localSettings?.deliveryMethods || {};
+      const payload = {
+        notificationsEnabled: Boolean(delivery.push || delivery.email || delivery.sms),
+        emailNotifications: delivery.email ?? true,
+        smsNotifications: delivery.sms ?? false,
+        pushNotifications: delivery.push ?? true,
+        deliveryMethods: localSettings?.deliveryMethods || {},
+        bookings: localSettings?.bookings || {},
+        technician: localSettings?.technician || {},
+        payments: localSettings?.payments || {},
+        marketing: localSettings?.marketing || {}
+      };
+
+      // Call backend API
+      const { data } = await axios.put('/api/users/me/settings', payload);
+      
+      // Update parent component
+      if (onUpdateSettings) {
+        onUpdateSettings(localSettings);
+      }
+      
       setHasChanges(false);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to save notification settings:', err);
+      setError(err.response?.data?.error || 'Failed to save settings. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleResetSettings = () => {
@@ -129,6 +162,19 @@ const NotificationSettings = ({ settings, onUpdateSettings }) => {
           </div>
         )}
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-center space-x-2">
+          <Icon name="CheckCircle" size={16} className="text-emerald-600" />
+          <span>Notification settings saved successfully!</span>
+        </div>
+      )}
       <div className="space-y-8">
         {/* Delivery Methods */}
         <div>

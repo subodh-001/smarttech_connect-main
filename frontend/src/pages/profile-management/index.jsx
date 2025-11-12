@@ -86,7 +86,50 @@ const ProfileManagement = () => {
       }
     };
 
+    const loadNotificationSettings = async () => {
+      try {
+        const { data } = await axios.get('/api/users/me/settings');
+        if (data) {
+          setNotificationSettings({
+            deliveryMethods: {
+              push: data.deliveryMethods?.push ?? data.pushNotifications ?? true,
+              email: data.deliveryMethods?.email ?? data.emailNotifications ?? true,
+              sms: data.deliveryMethods?.sms ?? data.smsNotifications ?? false,
+            },
+            bookings: data.bookings || {
+              newBooking: true,
+              statusUpdates: true,
+              reminders: true,
+              cancellations: true,
+            },
+            technician: data.technician || {
+              assignment: true,
+              location: true,
+              arrival: true,
+              completion: true,
+            },
+            payments: data.payments || {
+              invoices: true,
+              payments: true,
+              refunds: true,
+              failures: true,
+            },
+            marketing: data.marketing || {
+              offers: false,
+              newsletter: false,
+              tips: true,
+              surveys: false,
+            },
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load notification settings:', err);
+        // Use defaults if API fails
+      }
+    };
+
     loadSummary();
+    loadNotificationSettings();
   }, [authLoading, user]);
 
   useEffect(() => {
@@ -239,17 +282,12 @@ const ProfileManagement = () => {
 
   const handleNotificationUpdate = async (updatedSettings) => {
     setNotificationSettings(updatedSettings);
+    // The NotificationSettings component now handles the API call directly
+    // This is just for state synchronization
     try {
-      const delivery = updatedSettings?.deliveryMethods || {};
-      await axios.put('/api/users/me/settings', {
-        notificationsEnabled: Boolean(delivery.push || delivery.email || delivery.sms),
-        emailNotifications: delivery.email ?? true,
-        smsNotifications: delivery.sms ?? false,
-        pushNotifications: delivery.push ?? true,
-      });
       await fetchUserProfile();
     } catch (err) {
-      console.error('Failed to update notification settings:', err);
+      console.error('Failed to refresh user profile:', err);
     }
   };
 

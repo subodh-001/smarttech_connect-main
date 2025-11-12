@@ -149,7 +149,7 @@ const RescheduleModal = ({ booking, isOpen, onClose, onConfirm }) => {
                 <p className="font-medium text-text-primary mb-1">Reschedule Policy</p>
                 <ul className="text-text-secondary space-y-1">
                   <li>• Free rescheduling up to 2 hours before appointment</li>
-                  <li>• $5 fee for rescheduling within 2 hours</li>
+                  <li>• ₹5 fee for rescheduling within 2 hours</li>
                   <li>• Maximum 2 reschedules per booking</li>
                 </ul>
               </div>

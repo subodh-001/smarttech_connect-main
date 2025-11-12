@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Input from '../../../components/ui/Input';
 import Button from '../../../components/ui/Button';
 import Icon from '../../../components/AppIcon';
@@ -17,6 +17,8 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [updatingLocationId, setUpdatingLocationId] = useState(null);
+  const [hasAutoFixed, setHasAutoFixed] = useState(false);
 
   const handleInputChange = (field, value) => {
     setNewAddress(prev => ({ ...prev, [field]: value }));
@@ -48,16 +50,149 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
     return Object.keys(newErrors)?.length === 0;
   };
 
+  const geocodeAddress = async (street, city, state, zipCode) => {
+    try {
+      // Build address string for geocoding - prioritize India/Mumbai
+      let addressString = `${street}, ${city}, ${state} ${zipCode}, India`;
+      
+      // Special handling for Mulund (suburb of Mumbai)
+      const isMulund = street?.toLowerCase().includes('mulund') || 
+                       city?.toLowerCase().includes('mulund') ||
+                       addressString.toLowerCase().includes('mulund');
+      
+      if (isMulund) {
+        // Mulund is in Mumbai, use specific Mulund coordinates
+        // Mulund coordinates: approximately 19.1717° N, 72.9569° E
+        const mulundCoords = { lat: 19.1717, lng: 72.9569 };
+        
+        // Try to get more precise location first
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(`Mulund, ${street}, Mumbai, Maharashtra, India`)}&countrycodes=in&limit=3`,
+            {
+              headers: {
+                'User-Agent': 'SmartTechConnect/1.0'
+              }
+            }
+          );
+          
+          const data = await response.json();
+          if (data && data.length > 0) {
+            // Prefer results that mention Mulund or Mumbai
+            const mulundResult = data.find(result => 
+              result.display_name?.toLowerCase().includes('mulund') ||
+              result.display_name?.toLowerCase().includes('mumbai')
+            );
+            
+            if (mulundResult) {
+              return {
+                lat: parseFloat(mulundResult.lat),
+                lng: parseFloat(mulundResult.lon)
+              };
+            }
+          }
+        } catch (e) {
+          console.warn('Geocoding for Mulund failed, using default:', e);
+        }
+        
+        return mulundCoords;
+      }
+      
+      // Use OpenStreetMap Nominatim API (free, no API key required)
+      // Add country code to prioritize India
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressString)}&countrycodes=in&limit=5`,
+        {
+          headers: {
+            'User-Agent': 'SmartTechConnect/1.0' // Required by Nominatim
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        // Prefer results that mention Mumbai or Maharashtra
+        const mumbaiResult = data.find(result => 
+          result.display_name?.toLowerCase().includes('mumbai') ||
+          result.display_name?.toLowerCase().includes('maharashtra') ||
+          result.display_name?.toLowerCase().includes('mulund')
+        );
+        
+        const bestResult = mumbaiResult || data[0];
+        
+        // Validate coordinates are in India (rough bounds)
+        const lat = parseFloat(bestResult.lat);
+        const lng = parseFloat(bestResult.lon);
+        
+        // India is roughly between 6°N to 37°N and 68°E to 97°E
+        if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
+          return { lat, lng };
+        }
+      }
+      
+      // Fallback: Try with city, state, and country
+      const cityStateString = `${city}, ${state}, India`;
+      const fallbackResponse = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityStateString)}&countrycodes=in&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'SmartTechConnect/1.0'
+          }
+        }
+      );
+      
+      const fallbackData = await fallbackResponse.json();
+      if (fallbackData && fallbackData.length > 0) {
+        const lat = parseFloat(fallbackData[0].lat);
+        const lng = parseFloat(fallbackData[0].lon);
+        
+        // Validate coordinates
+        if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
+          return { lat, lng };
+        }
+      }
+      
+      // Final fallback based on city
+      if (city?.toLowerCase().includes('mumbai') || state?.toLowerCase().includes('maharashtra')) {
+        // Use Mulund coordinates if address mentions Mulund, otherwise Mumbai center
+        if (isMulund) {
+          return { lat: 19.1717, lng: 72.9569 }; // Mulund
+        }
+        return { lat: 19.0760, lng: 72.8777 }; // Mumbai center
+      }
+      
+      // Default Mumbai coordinates
+      return { lat: 19.0760, lng: 72.8777 };
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      // Fallback based on address content
+      const isMulund = street?.toLowerCase().includes('mulund') || 
+                       city?.toLowerCase().includes('mulund');
+      if (isMulund) {
+        return { lat: 19.1717, lng: 72.9569 }; // Mulund
+      }
+      return { lat: 19.0760, lng: 72.8777 }; // Mumbai center
+    }
+  };
+
   const handleSaveAddress = async () => {
     if (!validateAddress()) return;
 
     setIsLoading(true);
-    // Mock API call
-    setTimeout(() => {
+    try {
+      // Geocode the address to get coordinates
+      const coordinates = await geocodeAddress(
+        newAddress.street,
+        newAddress.city,
+        newAddress.state,
+        newAddress.zipCode
+      );
+      
       const updatedAddresses = [...addresses, { 
         ...newAddress, 
         id: Date.now(),
-        coordinates: { lat: 40.7128, lng: -74.0060 }
+        coordinates: coordinates
       }];
       onUpdateAddresses(updatedAddresses);
       setNewAddress({
@@ -69,8 +204,12 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
         isDefault: false
       });
       setIsAddingNew(false);
+    } catch (error) {
+      console.error('Failed to save address:', error);
+      alert('Failed to save address. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleSetDefault = (addressId) => {
@@ -85,6 +224,128 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
     const updatedAddresses = addresses?.filter(addr => addr?.id !== addressId);
     onUpdateAddresses(updatedAddresses);
   };
+
+  const handleUpdateLocation = async (address) => {
+    if (!address) return;
+    
+    setUpdatingLocationId(address.id);
+    try {
+      const coordinates = await geocodeAddress(
+        address.street,
+        address.city,
+        address.state,
+        address.zipCode
+      );
+      
+      const updatedAddresses = addresses.map(addr =>
+        addr.id === address.id
+          ? { ...addr, coordinates }
+          : addr
+      );
+      onUpdateAddresses(updatedAddresses);
+    } catch (error) {
+      console.error('Failed to update location:', error);
+      alert('Failed to update location. Please try again.');
+    } finally {
+      setUpdatingLocationId(null);
+    }
+  };
+
+  // Check if coordinates are likely incorrect (e.g., New York coordinates for Indian address)
+  const hasIncorrectCoordinates = (address) => {
+    if (!address?.coordinates?.lat || !address?.coordinates?.lng) return true;
+    
+    const lat = address.coordinates.lat;
+    const lng = address.coordinates.lng;
+    
+    // New York coordinates (the old hardcoded value)
+    const isNewYork = Math.abs(lat - 40.7128) < 0.1 && 
+                      Math.abs(lng - (-74.0060)) < 0.1;
+    
+    // Delhi coordinates (another common hardcoded value) - 28.6139, 77.209
+    const isDelhi = Math.abs(lat - 28.6139) < 0.5 && 
+                    Math.abs(lng - 77.209) < 0.5;
+    
+    // Check if address mentions specific Indian locations
+    const addressText = `${address?.street || ''} ${address?.city || ''} ${address?.state || ''}`.toLowerCase();
+    const isMumbaiAddress = addressText.includes('mumbai') || 
+                           addressText.includes('maharashtra') ||
+                           addressText.includes('mulund');
+    
+    // If address is Mumbai but coordinates are Delhi, it's wrong
+    if (isMumbaiAddress && isDelhi) return true;
+    
+    // If address is Mumbai but coordinates are not in Mumbai area (roughly 18.5-19.5 lat, 72.5-73.5 lng)
+    if (isMumbaiAddress) {
+      const isMumbaiArea = lat >= 18.5 && lat <= 19.5 && lng >= 72.5 && lng <= 73.5;
+      if (!isMumbaiArea) return true;
+    }
+    
+    const isIndianAddress = addressText.includes('mumbai') || 
+                           addressText.includes('maharashtra') ||
+                           addressText.includes('delhi') ||
+                           addressText.includes('bangalore') ||
+                           addressText.includes('kolkata') ||
+                           addressText.includes('chennai') ||
+                           addressText.includes('hyderabad') ||
+                           addressText.includes('pune');
+    
+    // If address is in India but coordinates are clearly in US (lat > 25 and lng < -50)
+    const isUSCoordinates = lat > 25 && lat < 50 && lng < -50 && lng > -130;
+    
+    // If address is in India but coordinates are in wrong hemisphere
+    const isWrongHemisphere = isIndianAddress && (lat < 0 || lng < 0);
+    
+    return isNewYork || (isDelhi && isMumbaiAddress) || (isIndianAddress && isUSCoordinates) || isWrongHemisphere;
+  };
+
+  // Auto-fix addresses with incorrect coordinates on component mount (only once)
+  useEffect(() => {
+    if (hasAutoFixed || !addresses || addresses.length === 0) return;
+    
+    const autoFixIncorrectAddresses = async () => {
+      const addressesToFix = addresses.filter(addr => hasIncorrectCoordinates(addr));
+      
+      if (addressesToFix.length === 0) {
+        setHasAutoFixed(true);
+        return;
+      }
+      
+      // Fix addresses one by one to avoid rate limiting
+      for (const address of addressesToFix) {
+        try {
+          const coordinates = await geocodeAddress(
+            address.street,
+            address.city,
+            address.state,
+            address.zipCode
+          );
+          
+          // Only update if coordinates are significantly different
+          if (coordinates && 
+              (Math.abs(coordinates.lat - (address.coordinates?.lat || 0)) > 0.01 ||
+               Math.abs(coordinates.lng - (address.coordinates?.lng || 0)) > 0.01)) {
+            const updatedAddresses = addresses.map(addr =>
+              addr.id === address.id
+                ? { ...addr, coordinates }
+                : addr
+            );
+            onUpdateAddresses(updatedAddresses);
+            
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (error) {
+          console.error('Auto-fix failed for address:', address.id, error);
+        }
+      }
+      
+      setHasAutoFixed(true);
+    };
+
+    autoFixIncorrectAddresses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   return (
     <div className="bg-surface border border-border rounded-lg p-6">
@@ -102,7 +363,20 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
       </div>
       <div className="space-y-4">
         {/* Existing Addresses */}
-        {addresses?.map((address) => (
+        {addresses?.map((address) => {
+          // Calculate markers outside of JSX to avoid hooks in render
+          const addressMarkers = address?.coordinates?.lat && address?.coordinates?.lng
+            ? [
+                {
+                  id: `addr-${address?.id}`,
+                  type: 'destination',
+                  position: [address.coordinates.lat, address.coordinates.lng],
+                  accent: '#2563eb',
+                },
+              ]
+            : [];
+
+          return (
           <div key={address?.id} className="border border-border rounded-lg p-4">
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -119,22 +393,9 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
                 </p>
                 
                 {/* Map Preview */}
-                <div className="mb-3 h-32 overflow-hidden rounded-lg border border-border">
+                <div className="mb-3 h-32 overflow-hidden rounded-lg border border-border relative">
                   <InteractiveMap
-                    markers={useMemo(
-                      () =>
-                        address?.coordinates?.lat && address?.coordinates?.lng
-                          ? [
-                              {
-                                id: `addr-${address?.id}`,
-                                type: 'destination',
-                                position: [address.coordinates.lat, address.coordinates.lng],
-                                accent: '#2563eb',
-                              },
-                            ]
-                          : [],
-                      [address],
-                    )}
+                    markers={addressMarkers}
                     center={
                       address?.coordinates?.lat && address?.coordinates?.lng
                         ? [address.coordinates.lat, address.coordinates.lng]
@@ -142,9 +403,28 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
                     }
                     zoom={14}
                   />
+                  {hasIncorrectCoordinates(address) && (
+                    <div className="absolute top-2 right-2 bg-warning/90 text-warning-foreground px-2 py-1 rounded text-xs flex items-center gap-1">
+                      <Icon name="AlertTriangle" size={12} />
+                      <span>Location may be incorrect</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  {hasIncorrectCoordinates(address) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleUpdateLocation(address)}
+                      iconName="MapPin"
+                      iconPosition="left"
+                      loading={updatingLocationId === address.id}
+                      className="border-warning text-warning hover:bg-warning/10"
+                    >
+                      Update Location
+                    </Button>
+                  )}
                   {!address?.isDefault && (
                     <Button
                       variant="ghost"
@@ -179,7 +459,8 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {/* Add New Address Form */}
         {isAddingNew && (
