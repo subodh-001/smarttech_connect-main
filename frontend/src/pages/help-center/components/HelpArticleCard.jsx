@@ -1,7 +1,7 @@
 import React from 'react';
 import { Eye, Clock, ChevronRight } from 'lucide-react';
 
-const formatDate = (dateString) => {
+  const formatDate = (dateString) => {
   if (!dateString) return 'Recently updated';
   try {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -34,22 +34,22 @@ const HelpArticleCard = ({ article, onClick }) => {
           <h3 className="text-base font-medium text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
             {article?.title}
           </h3>
-
+          
           {preview ? (
             <p className="text-sm text-gray-600 mt-2 line-clamp-2">{preview}</p>
           ) : null}
-
+          
           <div className="flex items-center space-x-4 mt-3 text-xs text-gray-500">
             <div className="flex items-center space-x-1">
               <Eye className="h-3 w-3" />
               <span>{article?.viewCount || 0} views</span>
             </div>
-
+            
             <div className="flex items-center space-x-1">
               <Clock className="h-3 w-3" />
               <span>{formatDate(article?.updatedAt || article?.createdAt)}</span>
             </div>
-
+            
             {article?.categoryLabel && (
               <span className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded-full text-xs">
                 {article.categoryLabel}
@@ -57,7 +57,7 @@ const HelpArticleCard = ({ article, onClick }) => {
             )}
           </div>
         </div>
-
+        
         <div className="flex-shrink-0">
           <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
         </div>

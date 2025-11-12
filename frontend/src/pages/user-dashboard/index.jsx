@@ -40,8 +40,8 @@ const UserDashboard = () => {
         setUser(
           isAuthenticated && userProfile
             ? {
-                name: userProfile?.full_name || userProfile?.name,
-                email: userProfile?.email,
+          name: userProfile?.full_name || userProfile?.name,
+          email: userProfile?.email,
                 location: userProfile?.location,
               }
             : null
@@ -51,7 +51,7 @@ const UserDashboard = () => {
         setWalletData({});
         setStats({});
       } finally {
-        setLoading(false);
+      setLoading(false);
       }
     };
 

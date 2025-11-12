@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const StatusControlPanel = ({
-  isAvailable,
-  onToggleAvailability,
-  currentLocation,
+const StatusControlPanel = ({ 
+  isAvailable, 
+  onToggleAvailability, 
+  currentLocation, 
   workingHours,
   onUpdateLocation,
   onUpdateWorkingHours,
@@ -40,14 +40,14 @@ const StatusControlPanel = ({
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <Button
+          <Button
               variant={isAvailable ? 'destructive' : 'success'}
-              onClick={onToggleAvailability}
-              className="min-w-24"
+            onClick={onToggleAvailability}
+            className="min-w-24"
               disabled={availabilityDisabled}
-            >
-              {isAvailable ? 'Go Offline' : 'Go Online'}
-            </Button>
+          >
+            {isAvailable ? 'Go Offline' : 'Go Online'}
+          </Button>
             {availabilityDisabled && availabilityDisabledReason ? (
               <p className="max-w-xs text-right text-xs text-text-secondary">{availabilityDisabledReason}</p>
             ) : null}

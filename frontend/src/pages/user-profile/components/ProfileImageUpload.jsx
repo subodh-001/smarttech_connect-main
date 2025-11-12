@@ -93,33 +93,33 @@ const ProfileImageUpload = ({ currentImage, onImageUpdate }) => {
              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
            </div>
          )}
-      </div>
+       </div>
 
-      <div className="absolute -bottom-2 -right-2 flex space-x-1">
-        {displayImage && (
-          <button
-            onClick={removeImage}
-            disabled={uploading}
-            className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow-lg transition-colors disabled:opacity-50"
-            title="Remove image"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        )}
-
-        <label className="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-full shadow-lg transition-colors cursor-pointer disabled:opacity-50">
-          <Camera className="h-3 w-3" />
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            disabled={uploading}
-            className="hidden"
-          />
-        </label>
-      </div>
-    </div>
-  );
+       <div className="absolute -bottom-2 -right-2 flex space-x-1">
+         {displayImage && (
+           <button
+             onClick={removeImage}
+             disabled={uploading}
+             className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow-lg transition-colors disabled:opacity-50"
+             title="Remove image"
+           >
+             <X className="h-3 w-3" />
+           </button>
+         )}
+         
+         <label className="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-full shadow-lg transition-colors cursor-pointer disabled:opacity-50">
+           <Camera className="h-3 w-3" />
+           <input
+             type="file"
+             accept="image/*"
+             onChange={handleFileSelect}
+             disabled={uploading}
+             className="hidden"
+           />
+         </label>
+       </div>
+     </div>
+   );
 };
 
-export default ProfileImageUpload;
+ export default ProfileImageUpload;

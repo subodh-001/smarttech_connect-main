@@ -3,13 +3,13 @@ import axios from 'axios';
 import Header from '../../components/ui/Header';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
-import {
-  Search,
-  Book,
-  MessageCircle,
-  Settings,
-  CreditCard,
-  Shield,
+import { 
+  Search, 
+  Book, 
+  MessageCircle, 
+  Settings, 
+  CreditCard, 
+  Shield, 
   HelpCircle,
   ChevronRight,
   ThumbsUp,
@@ -27,45 +27,45 @@ import { useAuth } from '../../contexts/MongoAuthContext';
 
 const CATEGORY_CONFIG = {
   'getting-started': {
-    id: 'getting-started',
-    title: 'Getting Started',
-    description: 'Learn the basics of using SmartTech Connect',
-    icon: Book,
+      id: 'getting-started',
+      title: 'Getting Started',
+      description: 'Learn the basics of using SmartTech Connect',
+      icon: Book,
     color: 'bg-blue-100 text-blue-600',
-  },
+    },
   'booking-services': {
-    id: 'booking-services',
-    title: 'Booking Services',
-    description: 'How to request and manage service appointments',
-    icon: MessageCircle,
+      id: 'booking-services',
+      title: 'Booking Services',
+      description: 'How to request and manage service appointments',
+      icon: MessageCircle,
     color: 'bg-green-100 text-green-600',
-  },
+    },
   'account-settings': {
-    id: 'account-settings',
-    title: 'Account & Settings',
-    description: 'Manage your profile and preferences',
-    icon: Settings,
+      id: 'account-settings',
+      title: 'Account & Settings',
+      description: 'Manage your profile and preferences',
+      icon: Settings,
     color: 'bg-purple-100 text-purple-600',
-  },
+    },
   billing: {
-    id: 'billing',
-    title: 'Billing & Payments',
-    description: 'Payment methods, invoices, and billing questions',
-    icon: CreditCard,
+      id: 'billing',
+      title: 'Billing & Payments',
+      description: 'Payment methods, invoices, and billing questions',
+      icon: CreditCard,
     color: 'bg-yellow-100 text-yellow-600',
-  },
+    },
   'privacy-security': {
-    id: 'privacy-security',
-    title: 'Privacy & Security',
-    description: 'Keep your account secure and understand our policies',
-    icon: Shield,
+      id: 'privacy-security',
+      title: 'Privacy & Security',
+      description: 'Keep your account secure and understand our policies',
+      icon: Shield,
     color: 'bg-red-100 text-red-600',
-  },
+    },
   troubleshooting: {
-    id: 'troubleshooting',
-    title: 'Troubleshooting',
-    description: 'Solve common issues and technical problems',
-    icon: HelpCircle,
+      id: 'troubleshooting',
+      title: 'Troubleshooting',
+      description: 'Solve common issues and technical problems',
+      icon: HelpCircle,
     color: 'bg-gray-100 text-gray-600',
   },
 };
@@ -136,12 +136,12 @@ const HelpCenter = () => {
         if (articleResponse?.data?.items) {
           setPopularArticles(articleResponse.data.items);
         }
-      } catch (error) {
+    } catch (error) {
         console.error('Error loading help center content:', error);
         setPageError('Unable to load help center content right now. Please try again in a moment.');
-      } finally {
+    } finally {
         setLoadingState((prev) => ({ ...prev, initial: false }));
-      }
+    }
     };
 
     loadInitialContent();
@@ -406,11 +406,11 @@ const HelpCenter = () => {
                 Loading articles...
               </div>
             ) : categoryArticles.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {categoryArticles.map((article) => (
                   <HelpArticleCard key={article.id} article={article} onClick={handleArticleOpen} />
-                ))}
-              </div>
+              ))}
+            </div>
             ) : (
               <div className="text-center py-12 text-gray-500">
                 <HelpCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -428,24 +428,24 @@ const HelpCenter = () => {
                 Loading article...
               </div>
             ) : (
-              <article className="max-w-4xl mx-auto">
-                <header className="mb-8">
+            <article className="max-w-4xl mx-auto">
+              <header className="mb-8">
                   <h1 className="text-3xl font-bold text-gray-900 mb-4">{selectedArticle.title}</h1>
                   <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                    <div className="flex items-center space-x-2">
-                      <Eye className="h-4 w-4" />
+                  <div className="flex items-center space-x-2">
+                    <Eye className="h-4 w-4" />
                       <span>{selectedArticle.viewCount || 0} views</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4" />
-                      <span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Clock className="h-4 w-4" />
+                    <span>
                         {selectedArticle.estimatedReadMinutes
                           ? `${selectedArticle.estimatedReadMinutes} min read`
                           : 'Quick read'}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <User className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <User className="h-4 w-4" />
                       <span>SmartTech Support Team</span>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -510,7 +510,7 @@ const HelpCenter = () => {
                   </p>
                 </div>
               </article>
-            )}
+              )}
           </div>
         )}
 
