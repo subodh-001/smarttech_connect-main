@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Header from '../../components/ui/Header';
 import Icon from '../../components/AppIcon';
@@ -112,14 +112,23 @@ const mapServiceRequestToBooking = (request) => {
     request.budgetMin ??
     0;
 
-  const technicianUser = request.technician || {};
-  const technicianName =
-    technicianUser.name ||
-    technicianUser.fullName ||
-    technicianUser.email ||
-    'Awaiting assignment';
+  // Handle technician data - backend formatServiceRequest returns request.technician with name property
+  const technicianUser = request.technician || null;
+  
+  // Extract technician name - backend returns technician.name (which is fullName || email)
+  let technicianName = 'Awaiting assignment';
+  if (technicianUser && typeof technicianUser === 'object') {
+    // Backend formatServiceRequest sets: name: technicianUser.fullName || technicianUser.email
+    technicianName = technicianUser.name || technicianUser.fullName || technicianUser.email || 'Awaiting assignment';
+    
+    // If name is generic "technician" or "Technician", try to get actual name
+    if (technicianName && (technicianName.toLowerCase() === 'technician' || technicianName === 'Technician')) {
+      technicianName = technicianUser.fullName || technicianUser.email || 'Awaiting assignment';
+    }
+  }
   const technicianAvatar =
-    technicianUser.avatar ||
+    technicianUser?.avatar ||
+    technicianUser?.avatarUrl ||
     `https://ui-avatars.com/api/?background=2563EB&color=fff&name=${encodeURIComponent(
       technicianName,
     )}`;
@@ -169,16 +178,16 @@ const mapServiceRequestToBooking = (request) => {
     fullAddress: request.locationAddress,
     price,
     technician: {
-      id: technicianUser.id || technicianUser._id || null,
+      id: technicianUser?.id || technicianUser?._id || null,
       name: technicianName,
-      rating: technicianUser.rating ?? technicianUser.averageRating ?? null,
-      experience: technicianUser.experience ?? technicianUser.yearsOfExperience ?? null,
-      specialization: technicianUser.specialization ?? null,
-      phone: technicianUser.phone || null,
-      email: technicianUser.email || null,
+      rating: technicianUser?.rating ?? technicianUser?.averageRating ?? null,
+      experience: technicianUser?.experience ?? technicianUser?.yearsOfExperience ?? null,
+      specialization: technicianUser?.specialization ?? null,
+      phone: technicianUser?.phone || null,
+      email: technicianUser?.email || null,
       avatar: technicianAvatar,
-      isOnline: technicianUser.isOnline ?? null,
-      distance: technicianUser.distance ?? null,
+      isOnline: technicianUser?.isOnline ?? null,
+      distance: technicianUser?.distance ?? null,
     },
     progress,
     eta,
@@ -197,7 +206,11 @@ const mapServiceRequestToBooking = (request) => {
 
 const BookingManagement = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('active');
+  const location = useLocation();
+  
+  // Check if we're coming from "Write Reviews" button
+  const initialTab = location?.state?.activeTab || 'active';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -234,6 +247,15 @@ const BookingManagement = () => {
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
+
+  // Handle navigation state for active tab
+  useEffect(() => {
+    if (location?.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+      // Clear the state to prevent it from persisting on refresh
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location?.state?.activeTab, navigate, location.pathname]);
 
   // Filter bookings based on active tab and search
   useEffect(() => {

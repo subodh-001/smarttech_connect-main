@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
@@ -15,10 +16,59 @@ const formatCurrencyINR = (amount) => {
   }
 };
 
-const BookingContextPanel = ({ booking, isExpanded, onToggle }) => {
+const BookingContextPanel = ({ booking, isExpanded, onToggle, onReschedule, onCall }) => {
+  const navigate = useNavigate();
   const [showFullDescription, setShowFullDescription] = useState(false);
 
   if (!booking) return null;
+
+  const handleViewLocation = () => {
+    if (booking?.location?.lat && booking?.location?.lng) {
+      // Open location in Google Maps
+      const url = `https://www.google.com/maps?q=${booking.location.lat},${booking.location.lng}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else if (booking?.location?.address) {
+      // Try to open with address if coordinates not available
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.location.address)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      alert('Location information is not available for this booking.');
+    }
+  };
+
+  const handleReschedule = () => {
+    if (onReschedule) {
+      onReschedule(booking);
+    } else {
+      // Navigate to booking management with reschedule intent
+      navigate(`/booking-management?bookingId=${booking?.id}&action=reschedule`);
+    }
+  };
+
+  const handleCall = () => {
+    if (onCall) {
+      onCall(booking);
+    } else {
+      // Try to get technician phone number from booking or conversation participant
+      // The phone number might be in the participant object passed from parent
+      const phoneNumber = booking?.technician?.phone || 
+                         booking?.technicianPhone ||
+                         booking?.participant?.phone ||
+                         (booking?.participant?.role === 'technician' ? booking?.participant?.phone : null);
+      
+      if (phoneNumber) {
+        // Clean phone number: keep digits and + sign
+        const cleanPhone = phoneNumber.replace(/[^\d+]/g, '');
+        if (cleanPhone && cleanPhone.length >= 10) {
+          window.location.href = `tel:${cleanPhone}`;
+        } else {
+          alert('Invalid phone number format. Please contact support.');
+        }
+      } else {
+        alert('Technician contact information is not available. Please use the chat feature to contact them.');
+      }
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -108,24 +158,35 @@ const BookingContextPanel = ({ booking, isExpanded, onToggle }) => {
 
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4 border-t border-border bg-muted/30">
+          {/* Service Details & Schedule Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-            <div>
-              <h5 className="text-sm font-medium text-text-primary mb-2">Service Details</h5>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-secondary">Service:</span>
-                  <span className="text-text-primary font-medium">
-                    {booking?.serviceType}
+            {/* Service Details Card */}
+            <div className="bg-surface rounded-lg p-4 border border-border shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Icon name="Wrench" size={16} className="text-primary" />
+                </div>
+                <h5 className="text-sm font-semibold text-text-primary">Service Details</h5>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-text-secondary font-medium">Service</span>
+                  <span className="text-sm text-text-primary font-medium text-right flex-1">
+                    {booking?.serviceType || '—'}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-secondary">Category:</span>
-                  <span className="text-text-primary">{booking?.category}</span>
+                <div className="h-px bg-border"></div>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-text-secondary font-medium">Category</span>
+                  <span className="text-sm text-text-primary text-right flex-1 capitalize">
+                    {booking?.category?.replace(/_/g, ' ') || '—'}
+                  </span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-secondary">Priority:</span>
+                <div className="h-px bg-border"></div>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-text-secondary font-medium">Priority</span>
                   <span
-                    className={`text-sm font-medium ${
+                    className={`text-sm font-semibold text-right flex-1 ${
                       booking?.priority === 'urgent'
                         ? 'text-error'
                         : booking?.priority === 'high'
@@ -133,37 +194,60 @@ const BookingContextPanel = ({ booking, isExpanded, onToggle }) => {
                         : 'text-text-primary'
                     }`}
                   >
-                    {booking?.priority ? capitalize(booking?.priority) : '—'}
+                    {booking?.priority ? (
+                      <span className="inline-flex items-center gap-1">
+                        {booking?.priority === 'urgent' && <Icon name="AlertCircle" size={12} />}
+                        {capitalize(booking?.priority)}
+                      </span>
+                    ) : '—'}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div>
-              <h5 className="text-sm font-medium text-text-primary mb-2">Schedule & Location</h5>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-secondary">Date:</span>
-                  <span className="text-text-primary font-medium">
+            {/* Schedule & Budget Card */}
+            <div className="bg-surface rounded-lg p-4 border border-border shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Icon name="Clock" size={16} className="text-primary" />
+                </div>
+                <h5 className="text-sm font-semibold text-text-primary">Schedule & Budget</h5>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-text-secondary font-medium">Date</span>
+                  <span className="text-sm text-text-primary font-medium text-right flex-1">
                     {formatDate(booking?.scheduledDate)}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-secondary">Time:</span>
-                  <span className="text-text-primary">{formatTime(booking?.scheduledTime)}</span>
+                <div className="h-px bg-border"></div>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-text-secondary font-medium">Time</span>
+                  <span className="text-sm text-text-primary text-right flex-1">
+                    {formatTime(booking?.scheduledTime)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-secondary">Budget:</span>
-                  <span className="text-text-primary font-medium">{budgetLabel}</span>
+                <div className="h-px bg-border"></div>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-text-secondary font-medium">Budget</span>
+                  <span className="text-sm text-text-primary font-semibold text-right flex-1 text-primary">
+                    {budgetLabel}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Description Card */}
           {booking?.description && (
-            <div>
-              <h5 className="text-sm font-medium text-text-primary mb-2">Description</h5>
-              <div className="bg-surface rounded-lg p-3">
+            <div className="bg-surface rounded-lg p-4 border border-border shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Icon name="FileText" size={16} className="text-primary" />
+                </div>
+                <h5 className="text-sm font-semibold text-text-primary">Description</h5>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3">
                 <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
                   {showFullDescription || booking?.description?.length <= 150
                     ? booking?.description
@@ -173,8 +257,11 @@ const BookingContextPanel = ({ booking, isExpanded, onToggle }) => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowFullDescription((prev) => !prev)}
-                    className="mt-2 p-0 h-auto text-primary hover:text-primary/80"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowFullDescription((prev) => !prev);
+                    }}
+                    className="mt-2 p-0 h-auto text-primary hover:text-primary/80 font-medium"
                   >
                     {showFullDescription ? 'Show less' : 'Show more'}
                   </Button>
@@ -183,45 +270,87 @@ const BookingContextPanel = ({ booking, isExpanded, onToggle }) => {
             </div>
           )}
 
-          <div>
-            <h5 className="text-sm font-medium text-text-primary mb-2">Service Location</h5>
-            <div className="bg-surface rounded-lg p-3">
-              <div className="flex items-start space-x-2">
-                <Icon name="MapPin" size={16} className="text-primary mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm text-text-primary font-medium">
-                    {booking?.location?.address || 'Address not provided'}
+          {/* Service Location Card */}
+          <div className="bg-surface rounded-lg p-4 border border-border shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Icon name="MapPin" size={16} className="text-primary" />
+              </div>
+              <h5 className="text-sm font-semibold text-text-primary">Service Location</h5>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Icon name="MapPin" size={18} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-text-primary font-semibold mb-1 break-words">
+                    {booking?.location?.address || booking?.locationAddress || 'Current location'}
                   </p>
-                  <p className="text-xs text-text-secondary mt-1">
-                    {[booking?.location?.city, booking?.location?.state, booking?.location?.postalCode]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </p>
+                  {([booking?.location?.city, booking?.location?.state, booking?.location?.postalCode].filter(Boolean).length > 0) && (
+                    <p className="text-xs text-text-secondary">
+                      {[booking?.location?.city, booking?.location?.state, booking?.location?.postalCode]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button variant="outline" size="sm">
-              <Icon name="MapPin" size={14} className="mr-2" />
+          {/* Action Buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleViewLocation();
+              }}
+              type="button"
+              className="w-full justify-center"
+            >
+              <Icon name="MapPin" size={16} className="mr-2" />
               View Location
             </Button>
-            <Button variant="outline" size="sm">
-              <Icon name="Calendar" size={14} className="mr-2" />
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReschedule();
+              }}
+              type="button"
+              className="w-full justify-center"
+            >
+              <Icon name="Calendar" size={16} className="mr-2" />
               Reschedule
             </Button>
-            <Button variant="outline" size="sm">
-              <Icon name="Phone" size={14} className="mr-2" />
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCall();
+              }}
+              type="button"
+              className="w-full justify-center"
+            >
+              <Icon name="Phone" size={16} className="mr-2" />
               Call
             </Button>
-            {booking?.status === 'in_progress' && (
-              <Button variant="default" size="sm">
-                <Icon name="CheckCircle" size={14} className="mr-2" />
-                Mark Complete
-              </Button>
-            )}
           </div>
+          {booking?.status === 'in_progress' && (
+            <Button 
+              variant="default" 
+              size="sm"
+              className="w-full"
+            >
+              <Icon name="CheckCircle" size={16} className="mr-2" />
+              Mark Complete
+            </Button>
+          )}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const ConversationHeader = ({ 
   participant, 
@@ -62,9 +63,16 @@ const ConversationHeader = ({
           
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-text-primary truncate">
-              {participant?.name}
+              {participant?.role === 'technician' 
+                ? formatTechnicianName(participant)
+                : participant?.name || 'User'}
             </h3>
-            <div className="flex items-center space-x-2">
+            {participant?.email && (
+              <p className="text-xs text-text-secondary truncate mt-0.5">
+                {participant.email}
+              </p>
+            )}
+            <div className="flex items-center space-x-2 mt-1">
               <span className={`text-sm ${getStatusColor(participant?.status)}`}>
                 {getStatusText(participant?.status, participant?.lastSeen)}
               </span>

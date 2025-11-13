@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const JobDetailsModal = ({ isOpen, onClose, jobs = [], title = 'Job Details' }) => {
   if (!isOpen) return null;
@@ -113,11 +114,8 @@ const JobDetailsModal = ({ isOpen, onClose, jobs = [], title = 'Job Details' }) 
                         </p>
                         <p className="text-sm font-medium text-text-primary">
                           {job.partyName ||
-                            job.customer?.name ||
-                            job.customer?.fullName ||
-                            job.customerId?.name ||
-                            job.technician?.name ||
-                            job.technicianId?.name ||
+                            (job.technician || job.technicianId ? formatTechnicianName(job.technician || job.technicianId) : null) ||
+                            (job.customer || job.customerId ? (job.customer?.name || job.customer?.fullName || job.customerId?.name) : null) ||
                             'N/A'}
                         </p>
                         {(job.customer?.email || job.technician?.email) && (

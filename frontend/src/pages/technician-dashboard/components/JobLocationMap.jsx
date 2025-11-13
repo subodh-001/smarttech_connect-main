@@ -18,27 +18,21 @@ const JobLocationMap = ({ jobLocation, technicianLocation, height = 200 }) => {
   }
 
   const markers = useMemo(() => {
+    // Only show the user's service location (job location), not technician location
     const items = [
       {
         id: 'job-location',
         type: 'destination',
         position: [jobLocation.lat, jobLocation.lng],
         accent: '#f97316',
+        label: 'Service Location',
       },
     ];
 
-    if (technicianLocation?.lat && technicianLocation?.lng) {
-      items.push({
-        id: 'job-technician',
-        type: 'technician',
-        position: [technicianLocation.lat, technicianLocation.lng],
-        label: 'Technician',
-        highlight: true,
-      });
-    }
+    // Removed technician location marker - only show user's service location
 
     return items;
-  }, [jobLocation, technicianLocation]);
+  }, [jobLocation]);
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-border" style={{ height }}>

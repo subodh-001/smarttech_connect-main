@@ -14,6 +14,19 @@ const UserSchema = new mongoose.Schema(
     city: { type: String },
     state: { type: String },
     postalCode: { type: String },
+    addresses: [{
+      id: { type: String, required: true },
+      label: { type: String, required: true },
+      street: { type: String, required: true },
+      city: { type: String, required: true },
+      state: { type: String, required: true },
+      zipCode: { type: String, required: true },
+      isDefault: { type: Boolean, default: false },
+      coordinates: {
+        lat: { type: Number },
+        lng: { type: Number }
+      }
+    }],
     googleId: { type: String, index: true },
     authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
     publicId: { type: String, unique: true, index: true },

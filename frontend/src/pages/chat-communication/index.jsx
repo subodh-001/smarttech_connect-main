@@ -434,9 +434,12 @@ const ChatCommunication = () => {
                   />
                 </div>
 
-                <div className="hidden xl:flex xl:w-80 border-l border-border flex-col">
+                <div className="hidden xl:flex xl:w-[420px] border-l border-border flex-col">
                   <BookingContextPanel
-                    booking={enrichedSelectedConversation.booking}
+                    booking={{
+                      ...enrichedSelectedConversation.booking,
+                      participant: enrichedSelectedConversation.participant,
+                    }}
                     isExpanded={isBookingPanelExpanded}
                     onToggle={() => setIsBookingPanelExpanded((prev) => !prev)}
                   />

@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const ConversationList = ({
   conversations,
@@ -129,10 +130,19 @@ const ConversationList = ({
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <h4 className="font-medium text-text-primary truncate">
-                          {conversation?.participant?.name}
-                        </h4>
-                        <div className="flex items-center space-x-2 flex-shrink-0">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-text-primary truncate">
+                            {conversation?.participant?.role === 'technician' 
+                              ? formatTechnicianName(conversation?.participant)
+                              : conversation?.participant?.name || 'User'}
+                          </h4>
+                          {conversation?.participant?.email && (
+                            <p className="text-xs text-text-secondary truncate mt-0.5">
+                              {conversation.participant.email}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
                           <span className="text-xs text-text-secondary">
                             {formatLastMessageTime(lastMessage?.timestamp)}
                           </span>

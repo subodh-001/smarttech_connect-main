@@ -2,6 +2,7 @@ import React from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const BookingCard = ({ booking, onTrack, onReschedule, onCancel, onContact, onRate, onViewDetails }) => {
   const getStatusColor = (status) => {
@@ -90,8 +91,13 @@ const BookingCard = ({ booking, onTrack, onReschedule, onCancel, onContact, onRa
         </div>
         <div className="flex-1">
           <h4 className="font-medium text-text-primary">
-            {booking?.technician?.name || 'Awaiting assignment'}
+            {formatTechnicianName(booking?.technician)}
           </h4>
+          {booking?.technician?.email && (
+            <p className="text-xs text-text-secondary mt-0.5">
+              {booking?.technician?.email}
+            </p>
+          )}
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <div className="flex items-center gap-1">
               <Icon name="Star" size={14} className="text-warning fill-current" />
@@ -216,23 +222,51 @@ const BookingCard = ({ booking, onTrack, onReschedule, onCancel, onContact, onRa
           </>
         )}
 
-        {booking?.status === 'completed' && !booking?.isRated && (
+        {(booking?.status?.toLowerCase() === 'completed' || booking?.filterStatus === 'completed') && !booking?.isRated && (
           <Button
             variant="default"
             size="sm"
             onClick={() => onRate(booking)}
             iconName="Star"
             iconPosition="left"
-            className="flex-1 sm:flex-none"
+            fullWidth
           >
-            Rate Service
+            Rate & Feedback
           </Button>
         )}
 
-        {booking?.status === 'completed' && booking?.isRated && (
-          <div className="flex items-center gap-1 text-sm text-text-secondary">
-            <Icon name="Star" size={14} className="text-warning fill-current" />
-            <span>Rated {booking?.userRating}/5</span>
+        {(booking?.status?.toLowerCase() === 'completed' || booking?.filterStatus === 'completed') && booking?.isRated && (
+          <div className="w-full flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Icon
+                    key={star}
+                    name="Star"
+                    size={16}
+                    className={
+                      star <= (booking?.userRating || 0)
+                        ? 'text-warning fill-current'
+                        : 'text-muted-foreground'
+                    }
+                  />
+                ))}
+              </div>
+              <span className="text-sm font-medium text-text-primary">
+                {booking?.userRating}/5
+              </span>
+            </div>
+            {booking?.reviewComment && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRate(booking)}
+                iconName="MessageSquare"
+                className="text-text-secondary hover:text-text-primary"
+              >
+                View Feedback
+              </Button>
+            )}
           </div>
         )}
       </div>

@@ -150,6 +150,9 @@ const formatConversation = (requestDoc, { currentUserId, role, technicianProfile
     participant: {
       id: participantUser._id ? participantUser._id.toString() : null,
       name: participantName,
+      fullName: participantUser.fullName || null,
+      email: participantUser.email || null,
+      phone: participantUser.phone || null,
       avatar: participantUser.avatarUrl || fallbackAvatar(participantName),
       role: isTechnicianView ? 'user' : 'technician',
       status: participantStatus,
@@ -237,6 +240,11 @@ const formatServiceRequest = (request) => {
           name: customerUser.fullName || customerUser.email,
           email: customerUser.email,
           phone: customerUser.phone,
+          address: customerUser.address || null,
+          city: customerUser.city || null,
+          state: customerUser.state || null,
+          postalCode: customerUser.postalCode || null,
+          addresses: customerUser.addresses || [],
         }
       : null,
     technician: technicianUser
@@ -247,6 +255,11 @@ const formatServiceRequest = (request) => {
           email: technicianUser.email,
           phone: technicianUser.phone,
           avatar: technicianUser.avatarUrl,
+          rating: technicianUser.averageRating || null,
+          experience: technicianUser.yearsOfExperience || null,
+          specialization: Array.isArray(technicianUser.specialties) && technicianUser.specialties.length > 0
+            ? technicianUser.specialties.join(', ')
+            : null,
         }
       : null,
     technicianComments: Array.isArray(doc.technicianComments)
@@ -270,7 +283,7 @@ router.get('/available', authMiddleware, async (req, res) => {
         { technicianId },
       ],
     })
-      .populate('customerId', 'fullName email phone publicId')
+      .populate('customerId', 'fullName email phone publicId address city state postalCode addresses')
       .populate('technicianComments.authorId', 'fullName email avatarUrl role publicId')
       .sort({ createdAt: -1 })
       .limit(50);
@@ -304,7 +317,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const requests = await ServiceRequest.find(filter)
       .populate('technicianId', 'fullName email phone avatarUrl publicId')
-      .populate('customerId', 'fullName email phone publicId')
+      .populate('customerId', 'fullName email phone publicId address city state postalCode addresses')
       .populate('technicianComments.authorId', 'fullName email avatarUrl role publicId')
       .sort({ createdAt: -1 })
       .limit(Number(limit));
@@ -726,12 +739,15 @@ router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const request = await ServiceRequest.findById(id)
-      .populate('technicianId', 'fullName email phone avatarUrl publicId')
-      .populate('customerId', 'fullName email phone publicId')
+      .populate('technicianId', 'fullName email phone avatarUrl publicId averageRating yearsOfExperience specialties')
+      .populate('customerId', 'fullName email phone publicId address city state postalCode addresses')
       .populate('technicianComments.authorId', 'fullName email avatarUrl role publicId');
     if (!request) {
       return res.status(404).json({ error: 'Service request not found' });
     }
+
+    // Check access permissions
+    if (!ensureRequestAccess(req, res, request)) return;
 
     res.json(formatServiceRequest(request));
   } catch (error) {

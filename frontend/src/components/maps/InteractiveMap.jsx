@@ -141,7 +141,14 @@ const MapEffects = ({
 
   React.useEffect(() => {
     if (fitToBounds && bounds) {
-      map.fitBounds(bounds, { padding: [36, 36], maxZoom: 16 });
+      // If bounds are too small (same point or very close), zoom in more
+      const boundsSize = bounds.getNorthEast().distanceTo(bounds.getSouthWest());
+      const minZoom = boundsSize < 0.01 ? 15 : 12; // Zoom level 15 for very close points, 12 for wider area
+      map.fitBounds(bounds, { 
+        padding: [36, 36], 
+        maxZoom: 16,
+        minZoom: minZoom
+      });
     }
   }, [bounds, fitToBounds, map]);
 

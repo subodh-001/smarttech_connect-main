@@ -57,12 +57,17 @@ const formatTechnician = (doc, options) => {
   const { lat, lng, radiusInKm } = options;
   const userDoc = doc.userId || {};
 
-  const location = doc.lastLocation && typeof doc.lastLocation.lat === 'number'
-    ? doc.lastLocation
-    : DEFAULT_LOCATION;
+  // Only use lastLocation if it's valid (has numeric lat/lng)
+  const hasValidLocation = doc.lastLocation &&
+    typeof doc.lastLocation.lat === 'number' &&
+    typeof doc.lastLocation.lng === 'number' &&
+    !isNaN(doc.lastLocation.lat) &&
+    !isNaN(doc.lastLocation.lng);
+
+  const location = hasValidLocation ? doc.lastLocation : null;
 
   const distanceKm =
-    typeof lat === 'number' && typeof lng === 'number'
+    typeof lat === 'number' && typeof lng === 'number' && location
       ? haversineDistance(lat, lng, location.lat, location.lng)
       : null;
 

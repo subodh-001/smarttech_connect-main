@@ -1,10 +1,57 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const ActiveServiceCard = ({ service }) => {
+  const navigate = useNavigate();
+
+  const handleCall = (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    
+    console.log('Call button clicked', { service });
+    
+    // Try multiple possible paths for phone number
+    const phoneNumber = 
+      service?.technician?.phone || 
+      service?.technicianId?.phone ||
+      service?.technician?.phoneNumber ||
+      service?.technicianId?.phoneNumber ||
+      service?.technician?.contact?.phone ||
+      service?.assignedTechnician?.phone;
+    
+    console.log('Phone number found:', phoneNumber);
+    
+    if (phoneNumber) {
+      // Remove any non-digit characters except + for international numbers
+      const cleanPhone = phoneNumber.replace(/[^\d+]/g, '');
+      console.log('Calling:', cleanPhone);
+      window.location.href = `tel:${cleanPhone}`;
+    } else {
+      console.warn('No phone number found in service data:', service);
+      alert('Technician phone number is not available. Please contact support.');
+    }
+  };
+
+  const handleChat = (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    
+    console.log('Chat button clicked', { service });
+    
+    const serviceId = service?.id || service?._id || service?.serviceId || service?.requestId;
+    console.log('Service ID:', serviceId);
+    
+    if (serviceId) {
+      navigate(`/chat-communication?conversation=${serviceId}`);
+    } else {
+      console.warn('No service ID found in service data:', service);
+      alert('Service ID is not available. Cannot open chat.');
+    }
+  };
   const getStatusColor = (status) => {
     switch (status) {
       case 'assigned':
@@ -43,8 +90,15 @@ const ActiveServiceCard = ({ service }) => {
             />
           </div>
           <div>
-            <h3 className="font-semibold text-foreground">{service?.technician?.name}</h3>
-            <p className="text-sm text-muted-foreground">{service?.category}</p>
+            <h3 className="font-semibold text-foreground">
+              {formatTechnicianName(service?.technician)}
+            </h3>
+            <p className="text-sm text-muted-foreground">{service?.category || service?.serviceType}</p>
+            {service?.technician?.email && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {service?.technician?.email}
+              </p>
+            )}
           </div>
         </div>
         <div className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(service?.status)}`}>
@@ -57,15 +111,21 @@ const ActiveServiceCard = ({ service }) => {
       <div className="space-y-3 mb-4">
         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
           <Icon name="MapPin" size={16} />
-          <span>{service?.location}</span>
+          <span>{service?.location || service?.locationAddress || 'Current location'}</span>
         </div>
+        {/* Show user's saved address from profile if available */}
+        {service?.address && (service.address.city || service.address.state) && (
+          <div className="ml-6 text-xs text-muted-foreground">
+            {[service.address.city, service.address.state, service.address.postalCode].filter(Boolean).join(', ')}
+          </div>
+        )}
         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
           <Icon name="Clock" size={16} />
-          <span>ETA: {service?.eta}</span>
+          <span>ETA: {service?.eta || '—'}</span>
         </div>
         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
           <Icon name="IndianRupee" size={16} />
-          <span>₹{service?.budget}</span>
+          <span>₹{service?.budget || '—'}</span>
         </div>
       </div>
       <div className="flex space-x-2">
@@ -75,6 +135,8 @@ const ActiveServiceCard = ({ service }) => {
           iconName="Phone"
           iconPosition="left"
           className="flex-1"
+          onClick={handleCall}
+          type="button"
         >
           Call
         </Button>
@@ -84,6 +146,8 @@ const ActiveServiceCard = ({ service }) => {
           iconName="MessageCircle"
           iconPosition="left"
           className="flex-1"
+          onClick={handleChat}
+          type="button"
         >
           Chat
         </Button>

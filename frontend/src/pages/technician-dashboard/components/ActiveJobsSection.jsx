@@ -99,6 +99,53 @@ const ActiveJobsSection = ({
                 <Icon name="MapPin" size={16} color="var(--color-text-secondary)" />
                 <span className="text-sm text-text-secondary">{job?.address}</span>
               </div>
+              
+              {/* Show user's saved address from profile */}
+              {job?.customer?.addresses && Array.isArray(job.customer.addresses) && job.customer.addresses.length > 0 && (
+                <div className="ml-6 mt-2 pt-2 border-t border-border/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon name="User" size={12} className="text-text-secondary" />
+                    <span className="text-xs font-medium text-text-secondary">User's Saved Address:</span>
+                  </div>
+                  {(() => {
+                    // Get default address or first address
+                    const savedAddress = job.customer.addresses.find(addr => addr.isDefault) || job.customer.addresses[0];
+                    if (savedAddress) {
+                      const addressParts = [
+                        savedAddress.street,
+                        savedAddress.city,
+                        savedAddress.state,
+                        savedAddress.zipCode
+                      ].filter(Boolean);
+                      const savedAddressString = addressParts.join(', ');
+                      return (
+                        <div>
+                          <p className="text-xs text-text-primary font-medium">{savedAddress.label || 'Home'}</p>
+                          <p className="text-xs text-text-secondary mt-0.5">{savedAddressString}</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
+              
+              {/* Fallback: Show old address fields if addresses array is not available */}
+              {(!job?.customer?.addresses || !Array.isArray(job.customer.addresses) || job.customer.addresses.length === 0) && 
+               (job?.customer?.address || job?.customer?.city || job?.customer?.state) && (
+                <div className="ml-6 mt-2 pt-2 border-t border-border/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon name="User" size={12} className="text-text-secondary" />
+                    <span className="text-xs font-medium text-text-secondary">User's Address:</span>
+                  </div>
+                  <p className="text-xs text-text-secondary">
+                    {[job.customer.address, job.customer.city, job.customer.state, job.customer.postalCode]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </p>
+                </div>
+              )}
+              
               <div className="flex items-center space-x-2">
                 <Icon name="Clock" size={16} color="var(--color-text-secondary)" />
                 <span className="text-sm text-text-secondary">Started: {job?.startTime}</span>

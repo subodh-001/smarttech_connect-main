@@ -10,20 +10,66 @@ const activeStatuses = ['pending', 'confirmed', 'in_progress'];
 
 const formatActiveService = (reqDoc) => {
   const technician = reqDoc.technicianId;
+  
+  // Build full address from locationAddress and requirements
+  let location = reqDoc.locationAddress || 'Current location';
+  const requirements = reqDoc.requirements || {};
+  if (requirements.city || requirements.state || requirements.postalCode) {
+    const addressParts = [
+      reqDoc.locationAddress && reqDoc.locationAddress !== 'Current location' ? reqDoc.locationAddress : null,
+      requirements.city,
+      requirements.state,
+      requirements.postalCode
+    ].filter(Boolean);
+    if (addressParts.length > 0) {
+      location = addressParts.join(', ');
+    }
+  }
+  
+  // Calculate ETA - use estimatedDuration if available, otherwise provide a default based on status
+  let eta = null;
+  if (reqDoc.status !== 'completed') {
+    if (reqDoc.estimatedDuration) {
+      eta = `${reqDoc.estimatedDuration} mins`;
+    } else {
+      // Provide default ETA based on status
+      switch (reqDoc.status) {
+        case 'confirmed':
+          eta = 'Scheduled';
+          break;
+        case 'in_progress':
+          eta = 'On site';
+          break;
+        case 'pending':
+          eta = 'Awaiting';
+          break;
+        default:
+          eta = '—';
+      }
+    }
+  }
+  
   return {
     id: reqDoc._id,
     category: reqDoc.title || reqDoc.category,
+    serviceType: reqDoc.title || reqDoc.category,
     status: reqDoc.status,
-    location: reqDoc.locationAddress,
-    eta:
-      reqDoc.estimatedDuration && reqDoc.status !== 'completed'
-        ? `${reqDoc.estimatedDuration} mins`
-        : null,
+    location: location,
+    locationAddress: reqDoc.locationAddress,
+    address: {
+      street: reqDoc.locationAddress || null,
+      city: requirements.city || null,
+      state: requirements.state || null,
+      postalCode: requirements.postalCode || null,
+    },
+    eta: eta,
     budget: reqDoc.budgetMax || reqDoc.budgetMin || null,
     technician: technician
       ? {
           id: technician._id,
           name: technician.fullName || technician.email,
+          fullName: technician.fullName || null,
+          email: technician.email || null,
           avatar:
             technician.avatarUrl ||
             'https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=' +
@@ -49,6 +95,8 @@ const formatRecentBooking = (reqDoc) => {
       ? {
           id: technician._id,
           name: technician.fullName || technician.email,
+          fullName: technician.fullName || null,
+          email: technician.email || null,
           avatar:
             technician.avatarUrl ||
             'https://ui-avatars.com/api/?background=9333EA&color=fff&name=' +
@@ -69,7 +117,7 @@ router.get('/user', authMiddleware, async (req, res) => {
     const [userDoc, requests] = await Promise.all([
       User.findById(customerId).lean(),
       ServiceRequest.find({ customerId })
-        .populate('technicianId', 'fullName email phone avatarUrl averageRating')
+        .populate('technicianId', 'fullName email phone avatarUrl averageRating yearsOfExperience specialties')
         .sort({ createdAt: -1 })
         .lean(),
     ]);
@@ -85,10 +133,29 @@ router.get('/user', authMiddleware, async (req, res) => {
     }
 
     const activeServices = requests.filter((r) => activeStatuses.includes(r.status)).map(formatActiveService);
+    
+    // Format recent bookings and ensure completed bookings have technician data
     const recentBookings = requests
       .filter((r) => r.status === 'completed')
       .slice(0, 6)
-      .map(formatRecentBooking);
+      .map((reqDoc) => {
+        const formatted = formatRecentBooking(reqDoc);
+        // For completed bookings, ensure technician data is available
+        if (!formatted.technician && reqDoc.technicianId) {
+          // Try to get technician from the populated field
+          const tech = reqDoc.technicianId;
+          if (tech && (tech.fullName || tech.email)) {
+            formatted.technician = {
+              id: tech._id ? tech._id.toString() : null,
+              name: tech.fullName || tech.email || 'Technician',
+              fullName: tech.fullName || null,
+              email: tech.email || null,
+              avatar: tech.avatarUrl || `https://ui-avatars.com/api/?background=9333EA&color=fff&name=${encodeURIComponent(tech.fullName || tech.email || 'T')}`,
+            };
+          }
+        }
+        return formatted;
+      });
 
     const completedRequests = requests.filter((r) => r.status === 'completed');
     const totalSpend = completedRequests.reduce((sum, r) => sum + (r.finalCost || 0), 0);

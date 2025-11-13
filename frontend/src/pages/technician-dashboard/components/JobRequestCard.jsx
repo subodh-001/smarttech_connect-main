@@ -85,7 +85,41 @@ const JobRequestCard = ({
     : job?.scheduledDate
     ? new Date(job.scheduledDate).toLocaleString()
     : 'As soon as possible';
-  const location = job?.locationAddress || job?.location || 'On-site service';
+  
+  // Build full address display - prioritize structured address data
+  const getFullAddress = () => {
+    // First, try to build from structured address object
+    if (job?.address) {
+      const parts = [
+        job.address.street,
+        job.address.city,
+        job.address.state,
+        job.address.postalCode
+      ].filter(Boolean);
+      if (parts.length > 0) {
+        return parts.join(', ');
+      }
+    }
+    // Then try fullAddress (but not if it's just "Current location")
+    if (job?.fullAddress && job.fullAddress !== 'Current location') {
+      return job.fullAddress;
+    }
+    // Then try locationAddress (but not if it's just "Current location")
+    if (job?.locationAddress && job.locationAddress !== 'Current location') {
+      return job.locationAddress;
+    }
+    // Finally try location (but not if it's just "Current location")
+    if (job?.location && job.location !== 'Current location') {
+      return job.location;
+    }
+    return null; // Return null if only "Current location" is available
+  };
+  
+  const fullAddress = getFullAddress();
+  // Check if user selected "Current location" - this should show even if we have address
+  const isCurrentLocation = 
+    job?.locationAddress === 'Current location' || 
+    job?.location === 'Current location';
   const applicants = job?.applicants ?? job?.applicantsCount ?? '—';
   const rating = job?.customerRating ?? job?.customer?.rating ?? '--';
   const timeAgo = job?.timeAgo || (job?.createdAt ? new Date(job.createdAt).toLocaleString() : '');
@@ -131,19 +165,103 @@ const JobRequestCard = ({
         </div>
       )}
       <div className="space-y-3 mb-4">
-        <div className="flex items-center space-x-2">
-          <Icon name="MapPin" size={16} color="var(--color-text-secondary)" />
-          <span className="text-sm text-text-secondary">{location}</span>
-          {distanceKm ? (
-            <span className="text-xs text-text-secondary">
-              • {distanceKm.toFixed(1)} km away
-            </span>
-          ) : null}
-          {etaMinutes ? (
-            <span className="text-xs text-text-secondary hidden sm:inline">
-              • ETA ~{etaMinutes} mins
-            </span>
-          ) : null}
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <Icon name="MapPin" size={16} color="var(--color-text-secondary)" />
+            <span className="text-sm font-medium text-text-primary">Service Location</span>
+          </div>
+          <div className="pl-6">
+            {/* Show full address if available */}
+            {fullAddress ? (
+              <>
+                <p className="text-sm font-medium text-text-primary">{fullAddress}</p>
+                {/* Show city, state, postal code separately if available and not already in fullAddress */}
+                {job?.address && (job.address.city || job.address.state) && (
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    {[job.address.city, job.address.state, job.address.postalCode].filter(Boolean).join(', ')}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                {/* If no full address, show locationAddress or location */}
+                {job?.locationAddress && job.locationAddress !== 'Current location' ? (
+                  <p className="text-sm font-medium text-text-primary">{job.locationAddress}</p>
+                ) : job?.location && job.location !== 'Current location' ? (
+                  <p className="text-sm font-medium text-text-primary">{job.location}</p>
+                ) : null}
+              </>
+            )}
+            
+            {/* Always show "Current location" badge if user selected current location OR if no address is available */}
+            {(isCurrentLocation || !fullAddress) && (
+              <div className="flex items-center gap-1 mt-1.5">
+                <Icon name="Navigation" size={12} className="text-primary" />
+                <span className="text-xs text-primary font-medium">Current location</span>
+              </div>
+            )}
+            
+            {/* Show user's saved address from profile */}
+            {job?.customer?.addresses && Array.isArray(job.customer.addresses) && job.customer.addresses.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="User" size={14} className="text-text-secondary" />
+                  <span className="text-xs font-medium text-text-secondary">User's Saved Address:</span>
+                </div>
+                {(() => {
+                  // Get default address or first address
+                  const savedAddress = job.customer.addresses.find(addr => addr.isDefault) || job.customer.addresses[0];
+                  if (savedAddress) {
+                    const addressParts = [
+                      savedAddress.street,
+                      savedAddress.city,
+                      savedAddress.state,
+                      savedAddress.zipCode
+                    ].filter(Boolean);
+                    const savedAddressString = addressParts.join(', ');
+                    return (
+                      <div className="pl-5">
+                        <p className="text-xs text-text-primary font-medium">{savedAddress.label || 'Home'}</p>
+                        <p className="text-xs text-text-secondary mt-0.5">{savedAddressString}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
+            
+            {/* Fallback: Show old address fields if addresses array is not available */}
+            {(!job?.customer?.addresses || !Array.isArray(job.customer.addresses) || job.customer.addresses.length === 0) && 
+             (job?.customer?.address || job?.customer?.city || job?.customer?.state) && (
+              <div className="mt-3 pt-3 border-t border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="User" size={14} className="text-text-secondary" />
+                  <span className="text-xs font-medium text-text-secondary">User's Address:</span>
+                </div>
+                <div className="pl-5">
+                  <p className="text-xs text-text-secondary">
+                    {[job.customer.address, job.customer.city, job.customer.state, job.customer.postalCode]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex items-center gap-3 mt-1">
+              {distanceKm ? (
+                <span className="text-xs text-text-secondary">
+                  {distanceKm.toFixed(1)} km away
+                </span>
+              ) : null}
+              {etaMinutes ? (
+                <span className="text-xs text-text-secondary">
+                  ETA ~{etaMinutes} mins
+                </span>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2">

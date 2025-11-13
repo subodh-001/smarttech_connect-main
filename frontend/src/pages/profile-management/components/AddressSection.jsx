@@ -7,6 +7,7 @@ import InteractiveMap from '../../../components/maps/InteractiveMap';
 const AddressSection = ({ addresses, onUpdateAddresses }) => {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editingAddress, setEditingAddress] = useState(null);
   const [newAddress, setNewAddress] = useState({
     label: '',
     street: '',
@@ -52,23 +53,41 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
 
   const geocodeAddress = async (street, city, state, zipCode) => {
     try {
-      // Build address string for geocoding - prioritize India/Mumbai
-      let addressString = `${street}, ${city}, ${state} ${zipCode}, India`;
+      // Special handling for known Mumbai areas
+      const addressLower = `${street} ${city} ${state}`.toLowerCase();
+      const isPowai = addressLower.includes('powai');
+      const isAndheri = addressLower.includes('andheri');
+      const isMulund = addressLower.includes('mulund');
+      const isChandivali = addressLower.includes('chandivali') || addressLower.includes('chandivli');
       
-      // Special handling for Mulund (suburb of Mumbai)
-      const isMulund = street?.toLowerCase().includes('mulund') || 
-                       city?.toLowerCase().includes('mulund') ||
-                       addressString.toLowerCase().includes('mulund');
+      // Known coordinates for Mumbai areas
+      const mumbaiAreas = {
+        powai: { lat: 19.1183, lng: 72.9067 },
+        andheri: { lat: 19.1136, lng: 72.8697 },
+        mulund: { lat: 19.1717, lng: 72.9569 },
+        chandivali: { lat: 19.1083, lng: 72.9067 }, // Chandivali coordinates
+      };
       
-      if (isMulund) {
-        // Mulund is in Mumbai, use specific Mulund coordinates
-        // Mulund coordinates: approximately 19.1717° N, 72.9569° E
-        const mulundCoords = { lat: 19.1717, lng: 72.9569 };
-        
-        // Try to get more precise location first
+      // Try multiple geocoding strategies for better accuracy
+      const geocodeStrategies = [
+        // Strategy 1: Full address with street, area, city
+        `${street}, ${city}, ${state} ${zipCode}, India`,
+        // Strategy 2: Area name + Mumbai (for areas like Chandivali)
+        isChandivali ? `Chandivali, Mumbai, Maharashtra, India` : null,
+        // Strategy 3: Street + area (if street contains area name)
+        street?.includes(',') ? street.split(',')[0] + `, ${city}, ${state}, India` : null,
+        // Strategy 4: Area + city (extract area from street if possible)
+        city && state ? `${city}, ${state}, India` : null,
+        // Strategy 5: For Mumbai addresses, try with "Mumbai" explicitly
+        (city?.toLowerCase().includes('mumbai') || state?.toLowerCase().includes('maharashtra')) 
+          ? `${street}, Mumbai, Maharashtra, India` : null,
+      ].filter(Boolean);
+      
+      // Try each strategy
+      for (const queryString of geocodeStrategies) {
         try {
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(`Mulund, ${street}, Mumbai, Maharashtra, India`)}&countrycodes=in&limit=3`,
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryString)}&countrycodes=in&limit=10&addressdetails=1`,
             {
               headers: {
                 'User-Agent': 'SmartTechConnect/1.0'
@@ -77,101 +96,166 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
           );
           
           const data = await response.json();
+          
           if (data && data.length > 0) {
-            // Prefer results that mention Mulund or Mumbai
-            const mulundResult = data.find(result => 
-              result.display_name?.toLowerCase().includes('mulund') ||
-              result.display_name?.toLowerCase().includes('mumbai')
+            // For Powai, Andheri, Mulund - find exact match
+            if (isPowai) {
+              const powaiResult = data.find(result => 
+                result.display_name?.toLowerCase().includes('powai') ||
+                (result.address?.suburb?.toLowerCase().includes('powai')) ||
+                (result.address?.neighbourhood?.toLowerCase().includes('powai'))
+              );
+              if (powaiResult) {
+                const lat = parseFloat(powaiResult.lat);
+                const lng = parseFloat(powaiResult.lon);
+                if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
+                  return { lat, lng };
+                }
+              }
+            }
+            
+            if (isAndheri) {
+              const andheriResult = data.find(result => 
+                result.display_name?.toLowerCase().includes('andheri') ||
+                (result.address?.suburb?.toLowerCase().includes('andheri')) ||
+                (result.address?.neighbourhood?.toLowerCase().includes('andheri'))
+              );
+              if (andheriResult) {
+                const lat = parseFloat(andheriResult.lat);
+                const lng = parseFloat(andheriResult.lon);
+                if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
+                  return { lat, lng };
+                }
+              }
+            }
+            
+            if (isMulund) {
+              const mulundResult = data.find(result => 
+                result.display_name?.toLowerCase().includes('mulund') ||
+                (result.address?.suburb?.toLowerCase().includes('mulund')) ||
+                (result.address?.neighbourhood?.toLowerCase().includes('mulund'))
+              );
+              if (mulundResult) {
+                const lat = parseFloat(mulundResult.lat);
+                const lng = parseFloat(mulundResult.lon);
+                if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
+                  return { lat, lng };
+                }
+              }
+            }
+            
+            if (isChandivali) {
+              const chandivaliResult = data.find(result => 
+                result.display_name?.toLowerCase().includes('chandivali') ||
+                result.display_name?.toLowerCase().includes('chandivli') ||
+                (result.address?.suburb?.toLowerCase().includes('chandivali')) ||
+                (result.address?.neighbourhood?.toLowerCase().includes('chandivali'))
+              );
+              if (chandivaliResult) {
+                const lat = parseFloat(chandivaliResult.lat);
+                const lng = parseFloat(chandivaliResult.lon);
+                // Validate it's in Mumbai area (not Delhi)
+                if (lat >= 18.5 && lat <= 19.5 && lng >= 72.5 && lng <= 73.5) {
+                  return { lat, lng };
+                }
+              }
+            }
+            
+            // For Mumbai addresses, prioritize Mumbai results and filter out Delhi
+            const isMumbaiAddress = city?.toLowerCase().includes('mumbai') || 
+                                   state?.toLowerCase().includes('maharashtra');
+            
+            if (isMumbaiAddress) {
+              // Filter out Delhi results (Delhi is around 28.6, 77.2)
+              const mumbaiResults = data.filter(result => {
+                const lat = parseFloat(result.lat);
+                const lng = parseFloat(result.lon);
+                // Mumbai area: 18.5-19.5 lat, 72.5-73.5 lng
+                // Delhi area: 28-29 lat, 77-78 lng
+                return lat >= 18.5 && lat <= 19.5 && lng >= 72.5 && lng <= 73.5;
+              });
+              
+              if (mumbaiResults.length > 0) {
+                // Prefer results that mention Mumbai or the area name
+                const cityMatch = mumbaiResults.find(result => 
+                  result.display_name?.toLowerCase().includes(city?.toLowerCase() || '') ||
+                  result.display_name?.toLowerCase().includes('mumbai') ||
+                  result.address?.city?.toLowerCase() === city?.toLowerCase() ||
+                  result.address?.town?.toLowerCase() === city?.toLowerCase()
+                );
+                
+                const bestResult = cityMatch || mumbaiResults[0];
+                const lat = parseFloat(bestResult.lat);
+                const lng = parseFloat(bestResult.lon);
+                return { lat, lng };
+              }
+            }
+            
+            // For other addresses, prefer results that match city/state
+            const cityMatch = data.find(result => 
+              result.display_name?.toLowerCase().includes(city?.toLowerCase() || '') ||
+              result.address?.city?.toLowerCase() === city?.toLowerCase() ||
+              result.address?.town?.toLowerCase() === city?.toLowerCase()
             );
             
-            if (mulundResult) {
-              return {
-                lat: parseFloat(mulundResult.lat),
-                lng: parseFloat(mulundResult.lon)
-              };
+            const bestResult = cityMatch || data[0];
+            const lat = parseFloat(bestResult.lat);
+            const lng = parseFloat(bestResult.lon);
+            
+            // Validate coordinates are in India
+            if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
+              return { lat, lng };
             }
           }
-        } catch (e) {
-          console.warn('Geocoding for Mulund failed, using default:', e);
-        }
-        
-        return mulundCoords;
-      }
-      
-      // Use OpenStreetMap Nominatim API (free, no API key required)
-      // Add country code to prioritize India
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressString)}&countrycodes=in&limit=5`,
-        {
-          headers: {
-            'User-Agent': 'SmartTechConnect/1.0' // Required by Nominatim
-          }
-        }
-      );
-      
-      const data = await response.json();
-      
-      if (data && data.length > 0) {
-        // Prefer results that mention Mumbai or Maharashtra
-        const mumbaiResult = data.find(result => 
-          result.display_name?.toLowerCase().includes('mumbai') ||
-          result.display_name?.toLowerCase().includes('maharashtra') ||
-          result.display_name?.toLowerCase().includes('mulund')
-        );
-        
-        const bestResult = mumbaiResult || data[0];
-        
-        // Validate coordinates are in India (rough bounds)
-        const lat = parseFloat(bestResult.lat);
-        const lng = parseFloat(bestResult.lon);
-        
-        // India is roughly between 6°N to 37°N and 68°E to 97°E
-        if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
-          return { lat, lng };
+        } catch (strategyError) {
+          console.warn('Geocoding strategy failed:', strategyError);
+          continue; // Try next strategy
         }
       }
       
-      // Fallback: Try with city, state, and country
-      const cityStateString = `${city}, ${state}, India`;
-      const fallbackResponse = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityStateString)}&countrycodes=in&limit=1`,
-        {
-          headers: {
-            'User-Agent': 'SmartTechConnect/1.0'
-          }
-        }
-      );
+      // Fallback to known coordinates for specific areas
+      if (isPowai) return mumbaiAreas.powai;
+      if (isAndheri) return mumbaiAreas.andheri;
+      if (isMulund) return mumbaiAreas.mulund;
+      if (isChandivali) return mumbaiAreas.chandivali;
       
-      const fallbackData = await fallbackResponse.json();
-      if (fallbackData && fallbackData.length > 0) {
-        const lat = parseFloat(fallbackData[0].lat);
-        const lng = parseFloat(fallbackData[0].lon);
-        
-        // Validate coordinates
-        if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
-          return { lat, lng };
-        }
-      }
-      
-      // Final fallback based on city
+      // Final fallback: city center
       if (city?.toLowerCase().includes('mumbai') || state?.toLowerCase().includes('maharashtra')) {
-        // Use Mulund coordinates if address mentions Mulund, otherwise Mumbai center
-        if (isMulund) {
-          return { lat: 19.1717, lng: 72.9569 }; // Mulund
-        }
         return { lat: 19.0760, lng: 72.8777 }; // Mumbai center
       }
       
-      // Default Mumbai coordinates
-      return { lat: 19.0760, lng: 72.8777 };
+      // Default: try to get city coordinates
+      try {
+        const cityResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(`${city}, ${state}, India`)}&countrycodes=in&limit=1`,
+          {
+            headers: {
+              'User-Agent': 'SmartTechConnect/1.0'
+            }
+          }
+        );
+        const cityData = await cityResponse.json();
+        if (cityData && cityData.length > 0) {
+          const lat = parseFloat(cityData[0].lat);
+          const lng = parseFloat(cityData[0].lon);
+          if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 97) {
+            return { lat, lng };
+          }
+        }
+      } catch (e) {
+        console.warn('City geocoding failed:', e);
+      }
+      
+      // Ultimate fallback
+      return { lat: 19.0760, lng: 72.8777 }; // Mumbai center
     } catch (error) {
       console.error('Geocoding error:', error);
       // Fallback based on address content
-      const isMulund = street?.toLowerCase().includes('mulund') || 
-                       city?.toLowerCase().includes('mulund');
-      if (isMulund) {
-        return { lat: 19.1717, lng: 72.9569 }; // Mulund
-      }
+      const addressLower = `${street} ${city}`.toLowerCase();
+      if (addressLower.includes('powai')) return { lat: 19.1183, lng: 72.9067 };
+      if (addressLower.includes('andheri')) return { lat: 19.1136, lng: 72.8697 };
+      if (addressLower.includes('mulund')) return { lat: 19.1717, lng: 72.9569 };
+      if (addressLower.includes('chandivali') || addressLower.includes('chandivli')) return { lat: 19.1083, lng: 72.9067 };
       return { lat: 19.0760, lng: 72.8777 }; // Mumbai center
     }
   };
@@ -191,7 +275,7 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
       
       const updatedAddresses = [...addresses, { 
         ...newAddress, 
-        id: Date.now(),
+        id: Date.now().toString(),
         coordinates: coordinates
       }];
       onUpdateAddresses(updatedAddresses);
@@ -220,9 +304,28 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
     onUpdateAddresses(updatedAddresses);
   };
 
-  const handleDeleteAddress = (addressId) => {
-    const updatedAddresses = addresses?.filter(addr => addr?.id !== addressId);
-    onUpdateAddresses(updatedAddresses);
+  const handleDeleteAddress = async (addressId) => {
+    if (!addressId) return;
+    
+    const addressToDelete = addresses?.find(addr => addr?.id === addressId);
+    if (!addressToDelete) return;
+    
+    if (window.confirm(`Are you sure you want to delete "${addressToDelete.label}" address? This action cannot be undone.`)) {
+      const updatedAddresses = addresses?.filter(addr => addr?.id !== addressId);
+      
+      // Show loading state
+      setIsLoading(true);
+      
+      try {
+        // Wait for the save to complete
+        await onUpdateAddresses(updatedAddresses);
+      } catch (error) {
+        // Error is already handled in onUpdateAddresses, just log it
+        console.error('Delete failed:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   const handleUpdateLocation = async (address) => {
@@ -231,11 +334,15 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
     setUpdatingLocationId(address.id);
     try {
       const coordinates = await geocodeAddress(
-        address.street,
-        address.city,
-        address.state,
-        address.zipCode
+        address.street || '',
+        address.city || '',
+        address.state || '',
+        address.zipCode || ''
       );
+      
+      if (!coordinates || !coordinates.lat || !coordinates.lng) {
+        throw new Error('Could not geocode address');
+      }
       
       const updatedAddresses = addresses.map(addr =>
         addr.id === address.id
@@ -245,7 +352,7 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
       onUpdateAddresses(updatedAddresses);
     } catch (error) {
       console.error('Failed to update location:', error);
-      alert('Failed to update location. Please try again.');
+      alert(`Failed to update location: ${error.message || 'Please try again.'}`);
     } finally {
       setUpdatingLocationId(null);
     }
@@ -412,19 +519,17 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {hasIncorrectCoordinates(address) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleUpdateLocation(address)}
-                      iconName="MapPin"
-                      iconPosition="left"
-                      loading={updatingLocationId === address.id}
-                      className="border-warning text-warning hover:bg-warning/10"
-                    >
-                      Update Location
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleUpdateLocation(address)}
+                    iconName="MapPin"
+                    iconPosition="left"
+                    loading={updatingLocationId === address.id}
+                    className={hasIncorrectCoordinates(address) ? "border-warning text-warning hover:bg-warning/10" : ""}
+                  >
+                    Update Location
+                  </Button>
                   {!address?.isDefault && (
                     <Button
                       variant="ghost"
@@ -439,7 +544,10 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setEditingId(address?.id)}
+                    onClick={() => {
+                      setEditingId(address?.id);
+                      setEditingAddress({ ...address });
+                    }}
                     iconName="Edit"
                     iconPosition="left"
                   >
@@ -461,6 +569,134 @@ const AddressSection = ({ addresses, onUpdateAddresses }) => {
           </div>
           );
         })}
+
+        {/* Edit Address Form */}
+        {editingId && editingAddress && (
+          <div className="border border-border rounded-lg p-4 bg-muted/30">
+            <h3 className="font-medium text-text-primary mb-4">Edit Address</h3>
+            
+            <div className="space-y-4">
+              <Input
+                label="Address Label"
+                type="text"
+                value={editingAddress?.label || ''}
+                onChange={(e) => setEditingAddress({ ...editingAddress, label: e.target.value })}
+                placeholder="e.g., Home, Office, Apartment"
+                required
+              />
+              
+              <Input
+                label="Street Address"
+                type="text"
+                value={editingAddress?.street || ''}
+                onChange={(e) => setEditingAddress({ ...editingAddress, street: e.target.value })}
+                placeholder="Enter street address"
+                required
+              />
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Input
+                  label="City"
+                  type="text"
+                  value={editingAddress?.city || ''}
+                  onChange={(e) => setEditingAddress({ ...editingAddress, city: e.target.value })}
+                  required
+                />
+                
+                <Input
+                  label="State"
+                  type="text"
+                  value={editingAddress?.state || ''}
+                  onChange={(e) => setEditingAddress({ ...editingAddress, state: e.target.value })}
+                  required
+                />
+                
+                <Input
+                  label="ZIP Code"
+                  type="text"
+                  value={editingAddress?.zipCode || ''}
+                  onChange={(e) => setEditingAddress({ ...editingAddress, zipCode: e.target.value })}
+                  required
+                />
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id={`edit-default-${editingId}`}
+                  checked={editingAddress?.isDefault || false}
+                  onChange={(e) => setEditingAddress({ ...editingAddress, isDefault: e.target.checked })}
+                  className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                />
+                <label htmlFor={`edit-default-${editingId}`} className="text-sm text-text-secondary">
+                  Set as default address
+                </label>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="default"
+                  onClick={async () => {
+                    if (!editingAddress.label || !editingAddress.street || !editingAddress.city || !editingAddress.state || !editingAddress.zipCode) {
+                      alert('Please fill in all required fields');
+                      return;
+                    }
+                    
+                    setIsLoading(true);
+                    try {
+                      // Re-geocode the address
+                      const coordinates = await geocodeAddress(
+                        editingAddress.street,
+                        editingAddress.city,
+                        editingAddress.state,
+                        editingAddress.zipCode
+                      );
+                      
+                      const updatedAddresses = addresses.map(addr =>
+                        addr.id === editingId
+                          ? { ...editingAddress, coordinates }
+                          : addr
+                      );
+                      
+                      // If setting as default, unset others
+                      if (editingAddress.isDefault) {
+                        updatedAddresses.forEach(addr => {
+                          if (addr.id !== editingId) {
+                            addr.isDefault = false;
+                          }
+                        });
+                      }
+                      
+                      onUpdateAddresses(updatedAddresses);
+                      setEditingId(null);
+                      setEditingAddress(null);
+                    } catch (error) {
+                      console.error('Failed to save edited address:', error);
+                      alert('Failed to save address. Please try again.');
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  loading={isLoading}
+                  iconName="Save"
+                  iconPosition="left"
+                >
+                  Save Changes
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditingId(null);
+                    setEditingAddress(null);
+                  }}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Add New Address Form */}
         {isAddingNew && (

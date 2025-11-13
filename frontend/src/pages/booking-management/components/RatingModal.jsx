@@ -3,6 +3,7 @@ import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const RatingModal = ({ booking, isOpen, onClose, onSubmit }) => {
   const [rating, setRating] = useState(0);
@@ -102,8 +103,19 @@ const RatingModal = ({ booking, isOpen, onClose, onSubmit }) => {
               className="w-12 h-12 rounded-full object-cover"
             />
             <div>
-              <h3 className="font-medium text-text-primary">{booking?.technician?.name}</h3>
-              <p className="text-sm text-text-secondary">{booking?.technician?.specialization}</p>
+              <h3 className="font-medium text-text-primary">
+                {formatTechnicianName(booking?.technician)}
+              </h3>
+              {booking?.technician?.email && (
+                <p className="text-xs text-text-secondary mt-0.5">
+                  {booking?.technician?.email}
+                </p>
+              )}
+              {booking?.technician?.specialization && (
+                <p className="text-sm text-text-secondary mt-1">
+                  {booking?.technician?.specialization}
+                </p>
+              )}
             </div>
           </div>
 

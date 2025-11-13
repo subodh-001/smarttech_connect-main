@@ -12,6 +12,7 @@ import SecuritySection from './components/SecuritySection';
 import PayoutSettingsSection from './components/PayoutSettingsSection';
 import JobDetailsModal from './components/JobDetailsModal';
 import { useAuth } from '../../contexts/NewAuthContext';
+import { formatTechnicianName } from '../../utils/formatTechnicianName';
 
 const ProfileManagement = () => {
   const navigate = useNavigate();
@@ -161,7 +162,7 @@ const ProfileManagement = () => {
             technician: service.technician,
             technicianId: service.technicianId,
             partyLabel: 'Technician',
-            partyName: service.technician?.name || service.technicianId?.name || 'Technician',
+            partyName: formatTechnicianName(service.technician || service.technicianId),
           }));
           
           const recentBookings = (data?.recentBookings || []).map((booking) => ({
@@ -184,7 +185,7 @@ const ProfileManagement = () => {
             technician: booking.technician,
             technicianId: booking.technicianId,
             partyLabel: 'Technician',
-            partyName: booking.technician?.name || booking.technicianId?.name || 'Technician',
+            partyName: formatTechnicianName(booking.technician || booking.technicianId),
           }));
           
           // Combine all services for modal
@@ -252,8 +253,20 @@ const ProfileManagement = () => {
       }
     };
 
+    const loadAddresses = async () => {
+      try {
+        const { data } = await axios.get('/api/users/me');
+        if (data?.addresses && Array.isArray(data.addresses) && data.addresses.length > 0) {
+          setAddresses(data.addresses);
+        }
+      } catch (err) {
+        console.error('Failed to load addresses:', err);
+      }
+    };
+
     loadSummary();
     loadNotificationSettings();
+    loadAddresses();
   }, [authLoading, user]);
 
   useEffect(() => {
@@ -329,24 +342,41 @@ const ProfileManagement = () => {
       });
     }
 
-    if (
-      addresses.length === 0 &&
-      (userProfile.address || userProfile.city || userProfile.postal_code)
-    ) {
-      setAddresses([
-        {
-          id: Date.now(),
-          label: 'Primary',
-          street: userProfile.address || '',
-          city: userProfile.city || '',
-          state: userProfile.state || '',
-          zipCode: userProfile.postal_code || '',
-          isDefault: true,
-          coordinates: userProfile.coordinates || { lat: 28.6139, lng: 77.209 },
-        },
-      ]);
-    }
-  }, [userProfile, dashboardSummary, user, notificationSettings, addresses.length]);
+    // Load addresses from backend if not already loaded
+      // Only load addresses from backend if addresses array is empty (initial load)
+      // Don't reload if addresses.length changes after deletion - that would restore deleted addresses
+      if (addresses.length === 0) {
+        const loadAddressesFromBackend = async () => {
+          try {
+            const { data } = await axios.get('/api/users/me');
+            if (data?.addresses && Array.isArray(data.addresses) && data.addresses.length > 0) {
+              setAddresses(data.addresses);
+              return;
+            }
+            
+            // Fallback: Create address from old single address fields if addresses array is empty
+            if (userProfile.address || userProfile.city || userProfile.postal_code) {
+              setAddresses([
+                {
+                  id: Date.now().toString(),
+                  label: 'Primary',
+                  street: userProfile.address || '',
+                  city: userProfile.city || '',
+                  state: userProfile.state || '',
+                  zipCode: userProfile.postal_code || '',
+                  isDefault: true,
+                  coordinates: userProfile.coordinates || { lat: 19.0760, lng: 72.8777 }, // Mumbai default instead of Delhi
+                },
+              ]);
+            }
+          } catch (err) {
+            console.error('Failed to load addresses:', err);
+          }
+        };
+        
+        loadAddressesFromBackend();
+      }
+    }, [userProfile, dashboardSummary, user, notificationSettings]); // Removed addresses.length from dependencies
 
   const isTechnician = user?.role === 'technician' || user?.type === 'technician' || userProfile?.role === 'technician';
   
@@ -404,8 +434,59 @@ const ProfileManagement = () => {
     }
   };
 
-  const handleAddressesUpdate = (updatedAddresses) => {
-    setAddresses(updatedAddresses);
+  const handleAddressesUpdate = async (updatedAddresses) => {
+    // Validate addresses before sending
+    const validatedAddresses = (updatedAddresses || []).map(addr => {
+      // Ensure all required fields are present and valid
+      return {
+        id: addr.id || Date.now().toString(),
+        label: addr.label || 'Address',
+        street: addr.street || '',
+        city: addr.city || '',
+        state: addr.state || '',
+        zipCode: addr.zipCode || '',
+        isDefault: Boolean(addr.isDefault),
+        coordinates: addr.coordinates && typeof addr.coordinates === 'object' ? {
+          lat: typeof addr.coordinates.lat === 'number' ? addr.coordinates.lat : undefined,
+          lng: typeof addr.coordinates.lng === 'number' ? addr.coordinates.lng : undefined
+        } : undefined
+      };
+    });
+    
+    // Store previous addresses for rollback
+    const previousAddresses = [...addresses];
+    
+    // Optimistically update UI
+    setAddresses(validatedAddresses);
+    
+    // Save addresses to backend
+    try {
+      const response = await axios.put('/api/users/me', {
+        addresses: validatedAddresses
+      });
+      
+      // Update with server response to ensure consistency
+      // Use the validated addresses if server doesn't return addresses (for empty array case)
+      const savedAddresses = response.data?.addresses ?? validatedAddresses;
+      setAddresses(savedAddresses);
+      
+      // Verify the save was successful
+      if (response.status !== 200) {
+        throw new Error('Failed to save addresses');
+      }
+    } catch (error) {
+      console.error('Failed to save addresses:', error);
+      
+      // Revert to previous addresses on error
+      setAddresses(previousAddresses);
+      
+      // Show detailed error message
+      const errorMessage = error.response?.data?.error || 
+                          error.message || 
+                          'Failed to save addresses. Please try again.';
+      alert(errorMessage);
+      throw error; // Re-throw so caller knows it failed
+    }
   };
 
   const handleNotificationUpdate = async (updatedSettings) => {

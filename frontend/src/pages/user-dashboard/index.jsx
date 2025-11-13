@@ -162,14 +162,47 @@ const UserDashboard = () => {
               <section className="bg-card p-6 rounded-lg border border-border">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-foreground">Emergency Contact</h2>
-                  <Button size="sm" variant="outline" iconName="Phone" iconPosition="left">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    iconName="Phone" 
+                    iconPosition="left"
+                    onClick={() => window.location.href = 'tel:+918001234567'}
+                    type="button"
+                  >
                     Call Support
                   </Button>
                 </div>
                 <div className="space-y-3 text-sm text-muted-foreground">
-                  <p>24/7 Helpline: +91-800-123-4567</p>
-                  <p>Email: support@smarttechconnect.com</p>
-                  <p>WhatsApp: +91-900-123-4567</p>
+                  <p>
+                    24/7 Helpline:{' '}
+                    <a
+                      href="tel:+918001234567"
+                      className="text-primary hover:underline"
+                    >
+                      +91-800-123-4567
+                    </a>
+                  </p>
+                  <p>
+                    Email:{' '}
+                    <a
+                      href="mailto:support@smarttechconnect.com"
+                      className="text-primary hover:underline"
+                    >
+                      support@smarttechconnect.com
+                    </a>
+                  </p>
+                  <p>
+                    WhatsApp:{' '}
+                    <a
+                      href="https://wa.me/919001234567"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      +91-900-123-4567
+                    </a>
+                  </p>
                 </div>
               </section>
             </div>

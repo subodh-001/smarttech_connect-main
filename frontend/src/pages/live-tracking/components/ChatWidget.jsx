@@ -3,6 +3,7 @@ import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import Image from '../../../components/AppImage';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const ChatWidget = ({
   isOpen,
@@ -116,7 +117,14 @@ const ChatWidget = ({
             className="h-8 w-8 rounded-full object-cover"
           />
           <div>
-            <h4 className="font-medium text-foreground">{technician?.name || 'Technician'}</h4>
+            <h4 className="font-medium text-foreground">
+              {formatTechnicianName(technician)}
+            </h4>
+            {technician?.email && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {technician?.email}
+              </p>
+            )}
             <div className="flex items-center space-x-1">
               <div className="h-2 w-2 rounded-full bg-green-500"></div>
               <span className="text-xs text-muted-foreground">Online</span>

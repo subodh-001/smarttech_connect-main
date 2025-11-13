@@ -42,7 +42,7 @@ const EarningsPanel = ({ earningsData, onWithdraw, transactions = [], withdrawal
   const currentEarnings = earningsData?.[selectedPeriod];
 
   return (
-    <div className="bg-card rounded-lg border border-border p-6 shadow-subtle">
+    <div className="bg-card rounded-lg border border-border p-6 shadow-subtle" data-earnings-panel>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-text-primary">Earnings</h2>
         <Button

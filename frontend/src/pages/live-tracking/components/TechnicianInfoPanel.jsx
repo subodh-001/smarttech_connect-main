@@ -2,6 +2,7 @@ import React from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const TechnicianInfoPanel = ({ 
   technician, 
@@ -62,8 +63,13 @@ const TechnicianInfoPanel = ({
         </div>
         <div className="flex-1">
           <h3 className="font-semibold text-foreground">
-            {technician?.name || 'Awaiting assignment'}
+            {formatTechnicianName(technician)}
           </h3>
+          {technician?.email && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {technician?.email}
+            </p>
+          )}
           {ratingValue != null ? (
             <div className="flex items-center space-x-2">
               <div className="flex items-center">

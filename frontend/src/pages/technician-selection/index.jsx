@@ -380,14 +380,22 @@ const TechnicianSelection = () => {
   const categoryLabel = CATEGORY_LABELS[serviceRequest?.category] || serviceRequest?.category;
 
   const userLocation = useMemo(() => {
-    const lat =
-      typeof serviceRequest?.locationCoordinates?.lat === 'number'
-        ? serviceRequest.locationCoordinates.lat
-        : DEFAULT_COORDINATES.lat;
-    const lng =
-      typeof serviceRequest?.locationCoordinates?.lng === 'number'
-        ? serviceRequest.locationCoordinates.lng
-        : DEFAULT_COORDINATES.lng;
+    // Validate and normalize coordinates
+    let lat = DEFAULT_COORDINATES.lat;
+    let lng = DEFAULT_COORDINATES.lng;
+    
+    if (serviceRequest?.locationCoordinates) {
+      const rawLat = Number(serviceRequest.locationCoordinates.lat);
+      const rawLng = Number(serviceRequest.locationCoordinates.lng);
+      
+      // Validate latitude (-90 to 90) and longitude (-180 to 180)
+      if (!isNaN(rawLat) && isFinite(rawLat) && rawLat >= -90 && rawLat <= 90) {
+        lat = rawLat;
+      }
+      if (!isNaN(rawLng) && isFinite(rawLng) && rawLng >= -180 && rawLng <= 180) {
+        lng = rawLng;
+      }
+    }
 
     return {
       lat,

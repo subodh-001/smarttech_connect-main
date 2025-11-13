@@ -32,6 +32,8 @@ const ServiceRequestCreation = () => {
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [location, setLocation] = useState(DEFAULT_LOCATION_LABEL);
   const [coordinates, setCoordinates] = useState(DEFAULT_COORDINATES);
+  const [addressDetails, setAddressDetails] = useState(null); // Store full address details
+  const [userSavedAddress, setUserSavedAddress] = useState(null); // User's saved address from profile
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState(null);
   const [schedule, setSchedule] = useState(null);
@@ -47,18 +49,62 @@ const ServiceRequestCreation = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  // Load user's saved addresses on mount
+  useEffect(() => {
+    const loadUserAddresses = async () => {
+      if (!isAuthenticated) return;
+      try {
+        const { data } = await axios.get('/api/users/me');
+        if (data?.addresses && Array.isArray(data.addresses) && data.addresses.length > 0) {
+          // Get default address or first address
+          const defaultAddress = data.addresses.find(addr => addr.isDefault) || data.addresses[0];
+          if (defaultAddress) {
+            setUserSavedAddress({
+              street: defaultAddress.street || '',
+              city: defaultAddress.city || '',
+              state: defaultAddress.state || '',
+              postalCode: defaultAddress.zipCode || '',
+              label: defaultAddress.label || 'Home',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load user addresses:', error);
+      }
+    };
+    loadUserAddresses();
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
     let cancelled = false;
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         if (cancelled) return;
         const coords = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
         setCoordinates(coords);
-        setLocation((prev) => (prev === DEFAULT_LOCATION_LABEL ? 'Current location' : prev));
+        const wasDefault = location === DEFAULT_LOCATION_LABEL;
+        if (wasDefault) {
+          setLocation('Current location');
+          // Prefer user's saved address if available, otherwise reverse geocode
+          if (userSavedAddress && !cancelled) {
+            setAddressDetails(userSavedAddress);
+          } else {
+            // Reverse geocode to get address details for "Current location"
+            const addressData = await reverseGeocode(coords.lat, coords.lng);
+            if (addressData && !cancelled) {
+              setAddressDetails({
+                street: addressData.street,
+                city: addressData.city,
+                state: addressData.state,
+                postalCode: addressData.postalCode,
+              });
+            }
+          }
+        }
       },
       () => {},
       { enableHighAccuracy: true, timeout: 6000 }
@@ -66,7 +112,7 @@ const ServiceRequestCreation = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userSavedAddress]); // Include userSavedAddress in dependencies
 
   const handleCategorySelect = (category) => {
     setSelectedCategoryId(category?.id || '');
@@ -78,16 +124,70 @@ const ServiceRequestCreation = () => {
     setSelectedSubcategory(subcategoryId);
   };
 
-  const handleUseCurrentLocation = () => {
+  // Reverse geocode function to get address from coordinates
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'SmartTechConnect/1.0'
+          }
+        }
+      );
+      const data = await response.json();
+      if (data && data.address) {
+        const addr = data.address;
+        const street = addr.road || addr.house_number || '';
+        const city = addr.city || addr.town || addr.village || addr.suburb || '';
+        const state = addr.state || '';
+        const postalCode = addr.postal_code || '';
+        
+        const addressParts = [street, city, state, postalCode].filter(Boolean);
+        const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'Current location';
+        
+        return {
+          street: street || 'Current location',
+          city,
+          state,
+          postalCode,
+          fullAddress,
+        };
+      }
+    } catch (error) {
+      console.error('Reverse geocoding failed:', error);
+    }
+    return null;
+  };
+
+  const handleUseCurrentLocation = async () => {
     if (!('geolocation' in navigator)) return;
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const coords = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
         setCoordinates(coords);
         setLocation('Current location');
+        
+        // Prefer user's saved address if available, otherwise reverse geocode
+        if (userSavedAddress) {
+          setAddressDetails(userSavedAddress);
+        } else {
+          // Reverse geocode to get address details
+          const addressData = await reverseGeocode(coords.lat, coords.lng);
+          if (addressData) {
+            setAddressDetails({
+              street: addressData.street,
+              city: addressData.city,
+              state: addressData.state,
+              postalCode: addressData.postalCode,
+            });
+          }
+        }
+        // Keep location as "Current location" but we have address details for display
+        // The address will be shown to technicians while "Current location" badge indicates it's GPS-based
       },
       (error) => {
         console.warn('Unable to fetch location', error);
@@ -216,6 +316,10 @@ const ServiceRequestCreation = () => {
           min: budget?.min ?? null,
           max: budget?.max ?? null,
         },
+        // Include full address details for technicians
+        city: addressDetails?.city || null,
+        state: addressDetails?.state || null,
+        postalCode: addressDetails?.postalCode || null,
       },
       radiusInKm: DEFAULT_RADIUS_KM,
     };
@@ -333,6 +437,7 @@ const ServiceRequestCreation = () => {
                   onLocationChange={setLocation}
                   onCoordinatesChange={setCoordinates}
                   onUseCurrentLocation={handleUseCurrentLocation}
+                  onAddressDetailsChange={setAddressDetails}
                 />
               </div>
 

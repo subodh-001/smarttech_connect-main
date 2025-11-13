@@ -8,6 +8,7 @@ import Icon from '../../components/AppIcon';
 import ProfileHeader from '../profile-management/components/ProfileHeader';
 import JobDetailsModal from '../profile-management/components/JobDetailsModal';
 import { useAuth } from '../../contexts/NewAuthContext';
+import { formatTechnicianName } from '../../utils/formatTechnicianName';
 import {
   Mail,
   Phone,
@@ -316,7 +317,7 @@ const UserProfile = () => {
             title: service.title || service.category || service.service,
             locationAddress: service.locationAddress || service.location,
             partyLabel: 'Technician',
-            partyName: service?.technician?.name || service?.technicianId?.name || null,
+            partyName: formatTechnicianName(service?.technician || service?.technicianId) || null,
           }));
           const normalizedRecent = (data?.recentBookings ?? []).slice(0, 5).map((booking) => ({
             ...booking,
@@ -325,7 +326,7 @@ const UserProfile = () => {
             title: booking.title || booking.category || booking.service,
             locationAddress: booking.locationAddress || booking.location,
             partyLabel: 'Technician',
-            partyName: booking?.technician?.name || booking?.technicianId?.name || null,
+            partyName: formatTechnicianName(booking?.technician || booking?.technicianId) || null,
           }));
 
           // Only update state if component is still mounted
@@ -355,7 +356,7 @@ const UserProfile = () => {
             technician: service.technician,
             technicianId: service.technicianId,
             partyLabel: 'Technician',
-            partyName: service.technician?.name || service.technicianId?.name || 'Technician',
+            partyName: formatTechnicianName(service.technician || service.technicianId),
           }));
           
           const recentBookingsFormatted = (data?.recentBookings || []).map((booking) => ({
@@ -378,7 +379,7 @@ const UserProfile = () => {
             technician: booking.technician,
             technicianId: booking.technicianId,
             partyLabel: 'Technician',
-            partyName: booking.technician?.name || booking.technicianId?.name || 'Technician',
+            partyName: formatTechnicianName(booking.technician || booking.technicianId),
           }));
           
           // Combine all services for modal

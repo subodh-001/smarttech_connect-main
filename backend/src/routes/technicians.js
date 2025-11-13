@@ -220,6 +220,25 @@ router.put('/me/profile', authMiddleware, async (req, res) => {
         .slice(0, 10);
     }
 
+    // Handle lastLocation update
+    if (payload.lastLocation !== undefined) {
+      if (payload.lastLocation === null) {
+        updates.lastLocation = null;
+      } else if (typeof payload.lastLocation === 'object') {
+        const lat = typeof payload.lastLocation.lat === 'number' ? payload.lastLocation.lat : Number.parseFloat(payload.lastLocation.lat);
+        const lng = typeof payload.lastLocation.lng === 'number' ? payload.lastLocation.lng : Number.parseFloat(payload.lastLocation.lng);
+        
+        if (Number.isFinite(lat) && Number.isFinite(lng) && 
+            lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          updates.lastLocation = { lat, lng };
+        } else {
+          return res.status(400).json({ error: 'Invalid location coordinates. lat must be between -90 and 90, lng must be between -180 and 180.' });
+        }
+      } else {
+        return res.status(400).json({ error: 'lastLocation must be an object with lat and lng properties, or null.' });
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'No valid fields provided for update.' });
     }

@@ -193,22 +193,42 @@ const mergeNotificationStates = (nextNotifications, existingNotifications, persi
   });
 };
 
-const mapAvailableRequest = (request) => ({
-  id: request.id,
-  title: request.title,
-  category: request.category,
-  location: request.locationAddress,
-  coordinates: request.locationCoordinates || null,
-  budget: request.budgetMax ?? request.budgetMin ?? 0,
-  urgency: request.priority ?? 'medium',
-  customerRating: request.reviewRating ?? '—',
-  preferredTime: request.scheduledDate ? new Date(request.scheduledDate).toLocaleString() : 'Flexible schedule',
-  description: request.description,
-  timeAgo: formatRelativeTime(request.createdAt),
-  applicants: request.applicants ?? 0,
-  assignedToYou: Boolean(request.technician && request.technician.id),
-  customer: request.customer,
-});
+const mapAvailableRequest = (request) => {
+  const requirements = request.requirements || {};
+  const locationAddress = request.locationAddress || '';
+  const city = requirements.city || '';
+  const state = requirements.state || '';
+  const postalCode = requirements.postalCode || '';
+  
+  // Build full address string
+  const addressParts = [locationAddress, city, state, postalCode].filter(Boolean);
+  const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : locationAddress || 'Address not provided';
+  
+  return {
+    id: request.id,
+    title: request.title,
+    category: request.category,
+    location: locationAddress,
+    locationAddress: locationAddress,
+    fullAddress: fullAddress,
+    address: {
+      street: locationAddress,
+      city: city,
+      state: state,
+      postalCode: postalCode,
+    },
+    coordinates: request.locationCoordinates || null,
+    budget: request.budgetMax ?? request.budgetMin ?? 0,
+    urgency: request.priority ?? 'medium',
+    customerRating: request.reviewRating ?? '—',
+    preferredTime: request.scheduledDate ? new Date(request.scheduledDate).toLocaleString() : 'Flexible schedule',
+    description: request.description,
+    timeAgo: formatRelativeTime(request.createdAt),
+    applicants: request.applicants ?? 0,
+    assignedToYou: Boolean(request.technician && request.technician.id),
+    customer: request.customer,
+  };
+};
 
 const mapActiveRequest = (request) => ({
   id: request.id,
@@ -225,6 +245,7 @@ const mapActiveRequest = (request) => ({
   paymentStatus: request.paymentStatus || 'pending',
   paymentMethod: request.paymentMethod || null,
   technician: request.technician || null,
+  customer: request.customer || null, // Include full customer object with addresses
 });
 
 const mapAppointment = (request) => {
@@ -285,6 +306,7 @@ const TechnicianDashboard = () => {
   const [paymentModalJob, setPaymentModalJob] = useState(null);
   const [technicianPayoutInfo, setTechnicianPayoutInfo] = useState(null);
   const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
+  const [technicianProfile, setTechnicianProfile] = useState(null);
 
   const notificationReadIdsRef = useRef(new Set());
   const notificationStorageKey = useMemo(() => {
@@ -333,6 +355,8 @@ const TechnicianDashboard = () => {
           payoutMethod: data.technician.payoutMethod || 'none',
           upiId: data.technician.upiId || null,
         });
+        // Store full technician profile for QuickActions
+        setTechnicianProfile(data.technician);
       }
     } catch (error) {
       console.error('Failed to fetch technician payout info:', error);
@@ -831,7 +855,25 @@ const TechnicianDashboard = () => {
                 onEditProfile={() => navigate('/user-profile')}
                 onUploadDocuments={() => navigate('/user-profile#kyc')}
                 onManageServices={() => navigate('/user-profile')}
-                onViewAnalytics={() => console.log('Viewing analytics')}
+                onViewAnalytics={() => {
+                  setSearchParams((prev) => {
+                    const newParams = new URLSearchParams(prev);
+                    newParams.set('tab', 'overview');
+                    return newParams;
+                  });
+                  // Scroll to earnings panel or show analytics
+                  setTimeout(() => {
+                    const earningsPanel = document.querySelector('[data-earnings-panel]');
+                    if (earningsPanel) {
+                      earningsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }, 100);
+                }}
+                kycInfo={kycInfo}
+                earningsData={earningsData}
+                completedJobs={completedJobs}
+                userProfile={userProfile}
+                technicianProfile={technicianProfile}
                   />
                 </div>
               </div>

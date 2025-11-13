@@ -2,6 +2,7 @@ import React from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
+import { formatTechnicianName } from '../../../utils/formatTechnicianName';
 
 const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, onCancel, onContact }) => {
   if (!isOpen || !booking) return null;
@@ -99,7 +100,14 @@ const BookingDetailsModal = ({ booking, isOpen, onClose, onTrack, onReschedule, 
                 )}
               </div>
               <div className="flex-1">
-                <h4 className="font-medium text-text-primary">{booking?.technician?.name}</h4>
+                <h4 className="font-medium text-text-primary">
+                  {formatTechnicianName(booking?.technician)}
+                </h4>
+                {booking?.technician?.email && (
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    {booking?.technician?.email}
+                  </p>
+                )}
                 <div className="flex items-center gap-2 text-sm text-text-secondary mb-1">
                   <div className="flex items-center gap-1">
                     <Icon name="Star" size={14} className="text-warning fill-current" />

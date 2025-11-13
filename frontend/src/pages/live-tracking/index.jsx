@@ -11,6 +11,7 @@ import ChatWidget from './components/ChatWidget';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../contexts/NewAuthContext';
+import { formatTechnicianName } from '../../utils/formatTechnicianName';
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -177,12 +178,13 @@ const buildNotifications = (request, technicianInfo) => {
   const baseTimestamp = new Date(request.updatedAt || request.createdAt || Date.now());
   const items = [];
 
-  if (technicianInfo?.name) {
+  if (technicianInfo) {
+    const technicianName = formatTechnicianName(technicianInfo);
     items.push({
       id: Date.now(),
       type: 'status',
       title: 'Technician Assigned',
-      message: `${technicianInfo.name} has been assigned to your request.`,
+      message: `${technicianName} has been assigned to your request.`,
       timestamp: baseTimestamp,
       dismissed: false,
       actionLabel: 'View profile',
@@ -593,7 +595,7 @@ const LiveTracking = () => {
 
   const handleNotificationAction = useCallback(
     (notification) => {
-      if (notification?.actionLabel === 'View profile' && technicianInfo?.name) {
+      if (notification?.actionLabel === 'View profile' && technicianInfo) {
         handleChat();
       }
       handleDismissNotification(notification.id);
