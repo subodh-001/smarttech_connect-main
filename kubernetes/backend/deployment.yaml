@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smarttech-backend
+  namespace: smarttech
+  labels:
+    app: smarttech-backend
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: smarttech-backend
+  template:
+    metadata:
+      labels:
+        app: smarttech-backend
+        version: v1
+    spec:
+      containers:
+      - name: backend
+        image: subodh40/smarttech-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "5000"
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: smarttech-secrets
+              key: mongodb-uri
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: smarttech-secrets
+              key: jwt-secret
+        - name: FRONTEND_URL
+          valueFrom:
+            configMapKeyRef:
+              name: smarttech-config
+              key: frontend-url
+        - name: EMAIL_USER
+          valueFrom:
+            secretKeyRef:
+              name: smarttech-secrets
+              key: email-user
+              optional: true
+        - name: EMAIL_PASS
+          valueFrom:
+            secretKeyRef:
+              name: smarttech-secrets
+              key: email-pass
+              optional: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 40
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: backend-uploads-pvc
+      - name: logs
+        emptyDir: {}
+      restartPolicy: Always
+

@@ -1,8 +1,41 @@
-.DS_Store
-node_modules
-.idea
+# Dependencies
+node_modules/
 package-lock.json
-/build
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Build outputs
+dist/
+build/
+*.log
+logs/
+
+# IDE
 .vscode/
 .idea/
-vite.config.*s.*
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Kubernetes secrets (DO NOT COMMIT!)
+kubernetes/config/secrets.yaml
+!kubernetes/config/secrets.yaml.template
+
+# Jenkins
+.jenkins/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

@@ -1,278 +1,1492 @@
 # SmartTech Connect
 
-SmartTech Connect is a full-stack hyperlocal marketplace that connects households with verified technicians.  
-The codebase pairs a Vite/React frontend with an Express/MongoDB backend and now includes specialty-driven technician matching, KYC-enforced onboarding, surge-aware pricing, collaborative booking flows, live tracking, and in-app messaging.
+A full-stack hyperlocal marketplace platform that connects households with verified technicians. Built with React, Node.js, MongoDB, and deployed using Docker, Kubernetes, and Jenkins CI/CD.
 
-> Original GitHub source: [subodh-001/smarttech_connect-main](https://github.com/subodh-001/smarttech_connect-main.git).  
-> This fork re-organises the repo into `frontend/` and `backend/` workspaces and layers in all functionality documented below.
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Ready-326CE5?logo=kubernetes)
+![Jenkins](https://img.shields.io/badge/Jenkins-CI/CD-D24939?logo=jenkins)
 
----
-
-## Table of Contents
-
-1. [Features](#features)  
-2. [Architecture](#architecture)  
-3. [Tech Stack](#tech-stack)  
-4. [Getting Started](#getting-started)  
-5. [Environment Variables](#environment-variables)  
-6. [Available Scripts](#available-scripts)  
-7. [Demo Accounts & Seed Data](#demo-accounts--seed-data)  
-8. [API Overview](#api-overview)  
-9. [Frontend Routes](#frontend-routes)  
-10. [Key Workflows](#key-workflows)  
-11. [Development Notes](#development-notes)  
-12. [Roadmap Ideas](#roadmap-ideas)
+> **Original Source**: [subodh-001/smarttech_connect-main](https://github.com/subodh-001/smarttech_connect-main.git)
 
 ---
 
-## Features
+## 📋 Table of Contents
+
+1. [Features](#features)
+2. [Architecture](#architecture)
+3. [Project Flow](#project-flow)
+4. [Database Schema & Relations](#database-schema--relations)
+5. [Tech Stack](#tech-stack)
+6. [Prerequisites](#prerequisites)
+7. [Quick Start](#quick-start)
+8. [Local Development](#local-development)
+9. [Docker Deployment](#docker-deployment)
+10. [Kubernetes Deployment](#kubernetes-deployment)
+11. [Jenkins CI/CD Setup](#jenkins-cicd-setup)
+12. [Environment Variables](#environment-variables)
+13. [API Documentation](#api-documentation)
+14. [Troubleshooting](#troubleshooting)
+15. [Contributing](#contributing)
+
+---
+
+## ✨ Features
 
 ### Customer Experience
-- **OTP-protected onboarding** – timeboxed email verification with hashed codes.
-- **Dynamic dashboard & booking stats** – active jobs, completed bookings, rupee-formatted spending, recommendations.
-- **Service request creation** – category + subcategory + description validation; priority-based surge pricing (+10% high, +20% urgent) baked into the request payload.
-- **Technician discovery & matching** – filters by specialties, live distance/ETA, responsive list + map, comparison modal, and a pending “Request Booking” flow that requires technician confirmation.
-- **Booking management** – end-to-end CRUD of created requests, reschedule, cancel, submit reviews, and view complete history in INR.
-- **Live chat with technicians** – real conversations backed by persisted message history (text, location, images, booking updates) and booking context panel.
-- **Live tracking** – fully data-driven service tracking page showing map, route, ETA, service phases, technician info, and notifications.
-- **Help centre & support** – searchable knowledge base plus support ticket creation.
+- **OTP-protected onboarding** – Secure email verification with timeboxed codes
+- **Dynamic dashboard** – Real-time stats (active jobs, completed bookings, spending)
+- **Service request creation** – Category-based requests with surge pricing
+- **Technician discovery** – Specialty filtering, distance/ETA calculation, map view
+- **Booking management** – Full CRUD operations, reschedule, cancel, reviews
+- **Live chat** – Real-time messaging with technicians
+- **Live tracking** – Real-time service tracking with map, route, and ETA
+- **Help center** – Searchable knowledge base and support tickets
 
 ### Technician Experience
-- **KYC workflow** – upload government ID/selfie, auto-track status, capture review feedback for rejected attempts.
-- **Profile & specialties** – manage multi-specialty expertise, service radius, years of experience, certifications, hourly rate, bio.
-- **Availability control** – toggle online/offline post-KYC, update last-known location, and view jobs filtered by pending/active/completed.
-- **Job matching & acceptance** – see only requests inside specialty radius, receive pending bookings to approve, and update job status through the technician dashboard.
-- **Earnings dashboard** – daily/weekly/monthly insights with rupee formatting, completion ratio, and badges.
+- **KYC workflow** – Government ID and selfie verification
+- **Profile management** – Multi-specialty expertise, service radius, certifications
+- **Availability control** – Online/offline toggle, location updates
+- **Job matching** – Radius-based job recommendations
+- **Earnings dashboard** – Daily/weekly/monthly insights with rupee formatting
 
 ### Platform & Admin
-- **Role-based JWT auth** with middleware guards (`user`, `technician`, `admin`).
-- **Admin dashboard** – user/technician/service overview cards, document links, KYC review queue, live stats, and reports pipeline improvements.
-- **Technician matching service** – radius filtering with Haversine distance, ETA computation, and surge price projection (used by booking + technician search pages).
-- **Messaging persistence** – service requests now embed conversation history; REST endpoints power the chat UI.
-- **Support ticket logging** and **Help centre seeding** remain intact.
+- **Role-based authentication** – JWT-based access control (user, technician, admin)
+- **Admin dashboard** – User/technician/service overview, KYC review queue
+- **Technician matching** – Haversine distance calculation, ETA computation
+- **Messaging persistence** – Embedded conversation history in service requests
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 ```
 smarttech_connect-main/
-├── frontend/
+├── frontend/                    # React frontend application
 │   ├── src/
-│   │   ├── components/          # Shared UI primitives
-│   │   ├── pages/               # Route-level views (dashboards, booking, chat, tracking, admin, etc.)
-│   │   ├── contexts/            # Auth & global providers (JWT-aware)
-│   │   └── utils/hooks/assets   # Helpers and styling
-│   └── vite.config.mjs          # Dev server & proxy configuration
-├── backend/
+│   │   ├── components/          # Reusable UI components
+│   │   ├── pages/               # Route-level views
+│   │   ├── contexts/            # Auth & global state
+│   │   └── utils/               # Helper functions
+│   ├── Dockerfile               # Frontend container image
+│   └── nginx.conf               # Nginx configuration
+├── backend/                     # Node.js backend API
 │   ├── src/
-│   │   ├── index.js             # App bootstrap, database connection, seeding
-│   │   ├── middleware/          # JWT auth middleware
-│   │   ├── models/              # Mongoose schemas (User, Technician, ServiceRequest, HelpArticle, SupportTicket, OtpToken, etc.)
-│   │   ├── routes/              # REST endpoints (auth, users, technicians, service-requests, dashboard, help-center, support)
-│   │   └── services/            # Matching & utility modules
-│   └── .env.example             # Env hints
-└── README.md
+│   │   ├── index.js             # Application entry point
+│   │   ├── middleware/          # Auth middleware
+│   │   ├── models/              # Mongoose schemas
+│   │   ├── routes/              # API endpoints
+│   │   └── services/            # Business logic
+│   └── Dockerfile               # Backend container image
+├── kubernetes/                  # Kubernetes manifests
+│   ├── backend/                 # Backend deployment & service
+│   ├── frontend/                # Frontend deployment & service
+│   ├── mongodb/                 # MongoDB StatefulSet & service
+│   ├── config/                  # ConfigMaps & secrets
+│   ├── ingress.yaml             # Ingress configuration
+│   └── hpa.yaml                 # Horizontal Pod Autoscaler
+├── scripts/                     # Deployment scripts
+├── docker-compose.yml           # Local development setup
+├── Jenkinsfile                  # CI/CD pipeline
+└── README.md                    # This file
 ```
 
-- Frontend API calls proxy to `http://localhost:5000` during dev.
-- Backend defaults to `PORT=5000` but honours `process.env.PORT`.
+---
+
+## 🔄 Project Flow
+
+### User Registration & Authentication Flow
+
+```
+┌─────────────┐
+│   Landing   │
+│    Page     │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│  Role Selection │
+│  (User/Tech)    │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐      ┌──────────────┐
+│   Registration  │─────▶│  Send OTP    │
+│      Form       │      │   (Email)    │
+└──────┬──────────┘      └──────┬───────┘
+       │                        │
+       │                        ▼
+       │                 ┌──────────────┐
+       │                 │  Verify OTP  │
+       │                 └──────┬───────┘
+       │                        │
+       ▼                        ▼
+┌─────────────────┐      ┌──────────────┐
+│  Create Account │      │  OTP Valid?  │
+│   (User/Admin)  │      └──────┬───────┘
+└──────┬──────────┘            │
+       │                        │
+       ▼                        ▼
+┌─────────────────┐      ┌──────────────┐
+│  Login Success  │◀─────│  Yes/No     │
+│  (JWT Token)    │      └──────────────┘
+└─────────────────┘
+```
+
+### Customer Booking Flow
+
+```
+┌──────────────────┐
+│  User Dashboard  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────────┐
+│ Create Service       │
+│ Request              │
+│ - Category           │
+│ - Description        │
+│ - Location           │
+│ - Budget             │
+│ - Priority           │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Calculate Surge      │
+│ Pricing              │
+│ (+10% high, +20%     │
+│  urgent)             │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Find Technicians     │
+│ - Filter by          │
+│   specialty          │
+│ - Calculate distance │
+│ - Calculate ETA      │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Select Technician    │
+│ & Request Booking    │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Booking Status:      │
+│ PENDING              │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐      ┌──────────────────┐
+│ Technician Accepts? │─────▶│  Status:         │
+│                      │      │  CONFIRMED       │
+└──────────┬───────────┘      └────────┬─────────┘
+           │                           │
+           │ No                        │
+           ▼                           ▼
+┌──────────────────────┐      ┌──────────────────┐
+│ Status: CANCELLED    │      │  Status:         │
+│                      │      │  IN_PROGRESS     │
+└──────────────────────┘      └────────┬─────────┘
+                                        │
+                                        ▼
+                               ┌──────────────────┐
+                               │  Status:         │
+                               │  COMPLETED       │
+                               └────────┬─────────┘
+                                        │
+                                        ▼
+                               ┌──────────────────┐
+                               │  Rate & Review   │
+                               │  Technician      │
+                               └──────────────────┘
+```
+
+### Technician Workflow
+
+```
+┌──────────────────┐
+│ Tech Onboarding  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Complete Profile │
+│ - Specialties    │
+│ - Experience     │
+│ - Service Radius │
+│ - Hourly Rate    │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Submit KYC       │
+│ - Government ID  │
+│ - Selfie         │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐      ┌──────────────┐
+│ KYC Status:      │─────▶│  Admin       │
+│ UNDER_REVIEW     │      │  Reviews     │
+└──────────┬───────┘      └──────┬───────┘
+           │                     │
+           │                     ▼
+           │              ┌──────────────┐
+           │              │  Approved?   │
+           │              └──────┬───────┘
+           │                    │
+           │ Yes                │ No
+           ▼                    ▼
+┌──────────────────┐      ┌──────────────┐
+│ KYC: APPROVED    │      │ KYC: REJECTED│
+│                  │      │ (with feedback)│
+└──────────┬───────┘      └───────────────┘
+           │
+           ▼
+┌──────────────────┐
+│ Toggle Online    │
+│ Status           │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ View Available   │
+│ Job Requests     │
+│ (within radius)  │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Accept/Decline   │
+│ Booking Request  │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Update Job       │
+│ Status:          │
+│ CONFIRMED →      │
+│ IN_PROGRESS →    │
+│ COMPLETED        │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ View Earnings    │
+│ & Withdraw       │
+│ (with PIN)       │
+└──────────────────┘
+```
+
+### Messaging Flow
+
+```
+┌──────────────────┐
+│ Service Request  │
+│ Created          │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Conversation     │
+│ Auto-Created     │
+│ (embedded in     │
+│  ServiceRequest) │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ User/Technician  │
+│ Sends Message    │
+│ - Text           │
+│ - Image          │
+│ - Location       │
+│ - Booking Update │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Message Stored   │
+│ in ServiceRequest│
+│ messages[] array │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Delivery Status: │
+│ SENT → DELIVERED │
+│ → READ           │
+└──────────────────┘
+```
+
+### Payment & Withdrawal Flow
+
+```
+┌──────────────────┐
+│ Service          │
+│ Completed        │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Payment Status:  │
+│ AWAITING_PAYMENT │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Customer Pays    │
+│ (UPI/Cash/Card)  │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Payment Status:  │
+│ PAID             │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Amount Added to  │
+│ Technician       │
+│ Earnings         │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Technician       │
+│ Requests         │
+│ Withdrawal       │
+│ (with 4-digit    │
+│  PIN)            │
+└──────────┬───────┘
+           │
+           ▼
+┌──────────────────┐
+│ Withdrawal       │
+│ Status:          │
+│ PENDING →        │
+│ PROCESSING →     │
+│ COMPLETED        │
+└──────────────────┘
+```
 
 ---
 
-## Tech Stack
+## 🗄️ Database Schema & Relations
 
-| Layer      | Main Libraries & Tools |
-|------------|------------------------|
-| **Frontend** | React 18, Vite, React Router v6, Zustand/Auth context, Tailwind CSS, Lucide Icons, Framer Motion, React Hook Form, Axios, Recharts |
-| **Backend**  | Node.js, Express, Mongoose, MongoDB Atlas, bcrypt, jsonwebtoken, Nodemailer, Multer, MongoDB Memory Server |
-| **Tooling**  | ESLint, Prettier, Nodemon, npm scripts |
+### Entity Relationship Diagram
+
+```
+┌─────────────┐
+│    User     │
+│────────────│
+│ _id (PK)    │
+│ email (UK)  │
+│ fullName    │
+│ phone       │
+│ role        │
+│ addresses[] │
+└──────┬──────┘
+       │
+       │ 1:1
+       │
+       ▼
+┌─────────────┐
+│ Technician  │
+│────────────│
+│ _id (PK)    │
+│ userId (FK) │◀────┐
+│ specialties │     │
+│ kycStatus   │     │
+│ hourlyRate  │     │
+└──────┬──────┘     │
+       │            │
+       │ 1:N        │ 1:N
+       │            │
+       ▼            │
+┌─────────────┐     │
+│ServiceRequest│    │
+│────────────│     │
+│ _id (PK)    │     │
+│ customerId  │─────┘
+│ technicianId│─────┐
+│ category    │     │
+│ status      │     │
+│ messages[]  │     │
+│ finalCost   │     │
+└──────┬──────┘     │
+       │            │
+       │ 1:N        │ 1:N
+       │            │
+       ▼            │
+┌─────────────┐     │
+│ Withdrawal  │     │
+│────────────│     │
+│ _id (PK)    │     │
+│ technicianId│─────┘
+│ userId (FK) │─────┘
+│ amount      │
+│ status      │
+└─────────────┘
+
+┌─────────────┐
+│ OtpToken    │
+│────────────│
+│ _id (PK)    │
+│ email (FK)  │
+│ otpHash     │
+│ expiresAt   │
+└─────────────┘
+
+┌─────────────┐
+│SupportTicket│
+│────────────│
+│ _id (PK)    │
+│ userId (FK) │─────┐
+│ subject     │     │
+│ status      │     │
+└─────────────┘     │
+                    │
+                    │ References User
+                    │ (optional)
+```
+
+### Table/Collection Details
+
+#### 1. **User Collection**
+```javascript
+{
+  _id: ObjectId,
+  email: String (unique, indexed),
+  passwordHash: String,
+  fullName: String,
+  phone: String,
+  avatarUrl: String,
+  role: Enum['user', 'technician', 'admin'],
+  isActive: Boolean,
+  address: String,
+  city: String,
+  state: String,
+  postalCode: String,
+  addresses: [{
+    id: String,
+    label: String,
+    street: String,
+    city: String,
+    state: String,
+    zipCode: String,
+    isDefault: Boolean,
+    coordinates: { lat: Number, lng: Number }
+  }],
+  publicId: String (unique, indexed),
+  passwordChangedAt: Date,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+**Relations:**
+- `1:1` with `Technician` (via `userId`)
+- `1:N` with `ServiceRequest` (as `customerId`)
+- `1:N` with `SupportTicket` (as `userId`)
+- `1:N` with `Withdrawal` (as `userId`)
 
 ---
 
-## Getting Started
+#### 2. **Technician Collection**
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId (FK → User, indexed),
+  publicId: String (unique, indexed),
+  specialties: [String] (indexed),
+  yearsOfExperience: Number,
+  hourlyRate: Number,
+  averageRating: Number,
+  totalJobs: Number,
+  bio: String,
+  certifications: [String],
+  serviceRadius: Number,
+  currentStatus: Enum['available', 'busy', 'offline'],
+  lastLocation: { lat: Number, lng: Number },
+  kycStatus: Enum['not_submitted', 'under_review', 'approved', 'rejected'],
+  kycGovernmentDocumentPath: String,
+  kycSelfieDocumentPath: String,
+  kycSubmittedAt: Date,
+  kycReviewedAt: Date,
+  kycFeedback: String,
+  payoutMethod: Enum['upi', 'bank_transfer', 'none'],
+  upiId: String,
+  bankAccountName: String,
+  bankAccountNumber: String,
+  bankIfscCode: String,
+  withdrawalPIN: String (hashed),
+  createdAt: Date,
+  updatedAt: Date
+}
+```
 
-### Prerequisites
-- Node.js **18+**
-- npm (included with Node)
-- MongoDB Atlas account (or rely on in-memory fallback for local testing)
+**Relations:**
+- `1:1` with `User` (via `userId`)
+- `1:N` with `ServiceRequest` (as `technicianId`)
+- `1:N` with `Withdrawal` (as `technicianId`)
 
-### 1. Clone the repository
+---
+
+#### 3. **ServiceRequest Collection**
+```javascript
+{
+  _id: ObjectId,
+  customerId: ObjectId (FK → User, required),
+  technicianId: ObjectId (FK → User, optional),
+  category: Enum['plumbing', 'electrical', 'hvac', ...],
+  title: String,
+  description: String,
+  priority: Enum['low', 'medium', 'high', 'urgent'],
+  status: Enum['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'],
+  scheduledDate: Date,
+  completionDate: Date,
+  estimatedDuration: Number,
+  budgetMin: Number,
+  budgetMax: Number,
+  finalCost: Number,
+  paymentStatus: Enum['pending', 'awaiting_payment', 'paid', 'failed'],
+  paymentMethod: String,
+  reviewRating: Number,
+  reviewComment: String,
+  locationAddress: String,
+  locationCoordinates: { lat: Number, lng: Number },
+  images: [String],
+  requirements: Mixed,
+  messages: [{
+    senderId: ObjectId (FK → User),
+    senderRole: Enum['user', 'technician', 'admin'],
+    contentType: Enum['text', 'image', 'location', 'booking_update'],
+    content: String,
+    metadata: Mixed,
+    deliveryStatus: Enum['sent', 'delivered', 'read'],
+    createdAt: Date
+  }],
+  technicianComments: [{
+    authorId: ObjectId (FK → User),
+    authorRole: Enum['technician', 'admin'],
+    body: String,
+    attachments: [{ name: String, url: String }],
+    createdAt: Date
+  }],
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+**Relations:**
+- `N:1` with `User` (as `customerId`)
+- `N:1` with `User` (as `technicianId`)
+- Embedded `messages[]` array (no separate collection)
+- Embedded `technicianComments[]` array (no separate collection)
+
+---
+
+#### 4. **Withdrawal Collection**
+```javascript
+{
+  _id: ObjectId,
+  technicianId: ObjectId (FK → Technician, indexed),
+  userId: ObjectId (FK → User, indexed),
+  amount: Number (min: 0),
+  upiId: String,
+  status: Enum['pending', 'processing', 'completed', 'failed', 'cancelled'],
+  transactionId: String (unique),
+  processedAt: Date,
+  failureReason: String,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+**Relations:**
+- `N:1` with `Technician` (via `technicianId`)
+- `N:1` with `User` (via `userId`)
+
+---
+
+#### 5. **OtpToken Collection**
+```javascript
+{
+  _id: ObjectId,
+  email: String (indexed),
+  purpose: String (indexed),
+  otpHash: String,
+  expiresAt: Date (indexed, TTL),
+  attempts: Number,
+  verified: Boolean,
+  verifiedAt: Date,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+**Relations:**
+- References `User.email` (not a foreign key, but linked by email)
+
+---
+
+#### 6. **SupportTicket Collection**
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId (FK → User, optional),
+  name: String,
+  email: String,
+  subject: String,
+  category: Enum['technical', 'billing', 'account', 'service', 'feature', 'other'],
+  priority: Enum['low', 'medium', 'high', 'critical'],
+  message: String,
+  channel: Enum['email', 'phone', 'chat'],
+  status: Enum['open', 'in_progress', 'resolved', 'closed'],
+  metadata: Object,
+  lastActivityAt: Date,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+**Relations:**
+- `N:1` with `User` (via `userId`, optional)
+
+---
+
+#### 7. **HelpArticle Collection**
+```javascript
+{
+  _id: ObjectId,
+  title: String,
+  content: String,
+  category: String,
+  tags: [String],
+  views: Number,
+  helpful: Number,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+**Relations:**
+- Standalone collection (no foreign keys)
+
+---
+
+#### 8. **UserSettings Collection**
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId (FK → User),
+  notifications: {
+    email: Boolean,
+    sms: Boolean,
+    push: Boolean
+  },
+  preferences: Mixed,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+**Relations:**
+- `1:1` with `User` (via `userId`)
+
+---
+
+#### 9. **AdminSetting Collection**
+```javascript
+{
+  _id: ObjectId,
+  key: String (unique),
+  value: Mixed,
+  description: String,
+  updatedAt: Date
+}
+```
+
+**Relations:**
+- Standalone collection (no foreign keys)
+
+---
+
+### Key Relationships Summary
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| `User` → `Technician` | 1:1 | One user can have one technician profile |
+| `User` → `ServiceRequest` | 1:N | One user can create many service requests |
+| `Technician` → `ServiceRequest` | 1:N | One technician can handle many service requests |
+| `User` → `Withdrawal` | 1:N | One user (technician) can have many withdrawals |
+| `Technician` → `Withdrawal` | 1:N | One technician can have many withdrawals |
+| `User` → `SupportTicket` | 1:N | One user can create many support tickets |
+| `User` → `UserSettings` | 1:1 | One user has one settings record |
+| `ServiceRequest.messages[]` | Embedded | Messages are embedded in ServiceRequest (no separate collection) |
+| `ServiceRequest.technicianComments[]` | Embedded | Comments are embedded in ServiceRequest (no separate collection) |
+
+### Indexes
+
+**User Collection:**
+- `email` (unique)
+- `publicId` (unique)
+- `googleId` (sparse)
+
+**Technician Collection:**
+- `userId` (indexed)
+- `publicId` (unique)
+- `specialties` (indexed)
+
+**ServiceRequest Collection:**
+- `customerId` (indexed via populate)
+- `technicianId` (indexed via populate)
+- `status` (for filtering)
+
+**Withdrawal Collection:**
+- `technicianId` (indexed)
+- `userId` (indexed)
+- `status` (indexed)
+- `transactionId` (unique)
+
+**OtpToken Collection:**
+- `email + purpose` (compound unique)
+- `expiresAt` (TTL index for auto-deletion)
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| **Frontend** | React 18, Vite, React Router v6, Tailwind CSS, Axios, Leaflet Maps |
+| **Backend** | Node.js, Express, Mongoose, MongoDB, JWT, bcrypt, Nodemailer |
+| **Database** | MongoDB (Atlas or self-hosted) |
+| **Containerization** | Docker, Docker Compose |
+| **Orchestration** | Kubernetes |
+| **CI/CD** | Jenkins |
+| **Web Server** | Nginx (for frontend) |
+
+---
+
+## 📦 Prerequisites
+
+### For Local Development
+- **Node.js** 18+ and npm
+- **MongoDB** (Atlas account or local installation)
+- **Git**
+
+### For Docker Deployment
+- **Docker** 20.10+
+- **Docker Compose** 2.0+
+
+### For Kubernetes Deployment
+- **kubectl** (Kubernetes CLI)
+- **Kubernetes cluster** (minikube, kind, or cloud provider)
+- **Docker images** pushed to registry (Docker Hub, ECR, GCR, etc.)
+
+### For Jenkins CI/CD
+- **Jenkins** 2.400+ (LTS recommended)
+- **Jenkins Plugins**: Docker Pipeline, Kubernetes CLI, Git
+- **Docker Hub** account (or other container registry)
+
+---
+
+## 🚀 Quick Start
+
+### Option 1: Docker Compose (Recommended for Quick Start)
+
+```bash
+# Clone repository
+git clone https://github.com/subodh-001/smarttech_connect-main.git
+cd smarttech_connect-main
+
+# Start all services
+docker-compose up -d
+
+# Access application
+# Frontend: http://localhost:3000
+# Backend: http://localhost:5000
+```
+
+### Option 2: Local Development
+
+```bash
+# Install dependencies
+cd frontend && npm install
+cd ../backend && npm install
+
+# Start backend (Terminal 1)
+cd backend
+npm run dev
+
+# Start frontend (Terminal 2)
+cd frontend
+npm run dev
+```
+
+---
+
+## 💻 Local Development
+
+### 1. Clone Repository
 ```bash
 git clone https://github.com/subodh-001/smarttech_connect-main.git
 cd smarttech_connect-main
 ```
 
-### 2. Install dependencies
+### 2. Install Dependencies
+
+**Frontend:**
 ```bash
-# Frontend
 cd frontend
 npm install
+```
 
-# Backend
-cd ../backend
+**Backend:**
+```bash
+cd backend
 npm install
 ```
 
-### 3. Configure environment variables
-See [Environment Variables](#environment-variables) and create `backend/.env`.
+### 3. Configure Environment Variables
 
-### 4. Start development servers
-Run backend first, then frontend.
+Create `backend/.env`:
+```env
+MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/smarttech_connect
+JWT_SECRET=your-secret-key-change-in-production
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+FRONTEND_URL=http://localhost:5173
+PORT=5000
+```
+
+### 4. Start Development Servers
+
+**Terminal 1 - Backend:**
 ```bash
-# Terminal 1 - backend
 cd backend
 npm run dev
+```
 
-# Terminal 2 - frontend
-cd ../frontend
+**Terminal 2 - Frontend:**
+```bash
+cd frontend
 npm run dev
 ```
-- Frontend dev server: `http://localhost:5173`
-- Backend API: `http://localhost:5000`
+
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:5000
+
+### 5. Available Scripts
+
+**Frontend:**
+```bash
+npm run dev      # Start dev server
+npm run build    # Production build
+npm run preview  # Preview production build
+```
+
+**Backend:**
+```bash
+npm run dev      # Start with nodemon (auto-reload)
+npm start        # Production server
+npm run create-admin -- <email> <password> "Name"  # Create admin user
+```
 
 ---
 
-## Environment Variables
+## 🐳 Docker Deployment
 
-`backend/.env` (example values):
+### Building Docker Images
+
+#### Method 1: Using Build Script
+```bash
+# Make script executable
+chmod +x scripts/docker-build.sh
+
+# Build both images
+./scripts/docker-build.sh
 ```
-MONGODB_URI=mongodb+srv://<user>:<pass>@smarttech.xc49ynv.mongodb.net/?appName=SmartTech
-JWT_SECRET=change-me
-EMAIL_USER=your_gmail_username@gmail.com
-EMAIL_PASS=your_gmail_app_password
-EMAIL_FROM="SmartTech Connect <your_gmail_username@gmail.com>"
+
+#### Method 2: Manual Build
+```bash
+# Build backend
+docker build -t subodh40/smarttech-backend:latest ./backend
+
+# Build frontend
+docker build -t subodh40/smarttech-frontend:latest ./frontend
+```
+
+### Pushing to Docker Hub
+
+```bash
+# Login to Docker Hub
+docker login
+
+# Tag images (if not already tagged)
+docker tag smarttech-backend:latest subodh40/smarttech-backend:latest
+docker tag smarttech-frontend:latest subodh40/smarttech-frontend:latest
+
+# Push images
+docker push subodh40/smarttech-backend:latest
+docker push subodh40/smarttech-frontend:latest
+```
+
+**Your Docker Hub Profile**: https://hub.docker.com/repositories/subodh40
+
+### Running with Docker Compose
+
+```bash
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# View specific service logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# Stop services
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
+
+# Restart services
+docker-compose restart
+
+# Check status
+docker-compose ps
+```
+
+**Access Points:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5000
+- MongoDB: localhost:27017
+
+### Docker Compose Configuration
+
+The `docker-compose.yml` includes:
+- **MongoDB**: Persistent volumes for data
+- **Backend**: Environment variables, volume mounts for uploads/logs
+- **Frontend**: Nginx serving static files
+- **Networking**: Bridge network for service communication
+- **Health Checks**: Automatic container health monitoring
+
+---
+
+## ☸️ Kubernetes Deployment
+
+### Prerequisites
+
+1. **Kubernetes Cluster** (choose one):
+   - **Local**: minikube, kind, or k3s
+   - **Cloud**: AWS EKS, Google GKE, Azure AKS
+
+2. **kubectl** configured to access your cluster
+
+3. **Docker images** pushed to registry (Docker Hub: `subodh40/smarttech-backend:latest`)
+
+### Step-by-Step Deployment
+
+#### Step 1: Create Namespace
+```bash
+kubectl apply -f kubernetes/namespace.yaml
+```
+
+#### Step 2: Create Secrets
+```bash
+kubectl create secret generic smarttech-secrets \
+  --from-literal=mongodb-uri='mongodb://admin:password@mongodb:27017/smarttech_connect?authSource=admin' \
+  --from-literal=mongodb-username='admin' \
+  --from-literal=mongodb-password='your-secure-password' \
+  --from-literal=jwt-secret='your-jwt-secret-key-min-32-chars' \
+  --from-literal=email-user='your-email@gmail.com' \
+  --from-literal=email-pass='your-app-password' \
+  -n smarttech
+```
+
+**⚠️ Important**: Replace all placeholder values with your actual credentials!
+
+#### Step 3: Apply ConfigMap
+```bash
+kubectl apply -f kubernetes/config/configmap.yaml
+```
+
+#### Step 4: Deploy MongoDB
+```bash
+kubectl apply -f kubernetes/mongodb/
+```
+
+Wait for MongoDB to be ready:
+```bash
+kubectl wait --for=condition=ready pod -l app=mongodb -n smarttech --timeout=300s
+```
+
+#### Step 5: Deploy Backend
+```bash
+kubectl apply -f kubernetes/backend/
+```
+
+#### Step 6: Deploy Frontend
+```bash
+kubectl apply -f kubernetes/frontend/
+```
+
+#### Step 7: Apply Ingress (Optional)
+```bash
+kubectl apply -f kubernetes/ingress.yaml
+```
+
+**Note**: Requires ingress controller (nginx-ingress, traefik, etc.) and SSL certificate manager.
+
+#### Step 8: Apply Horizontal Pod Autoscaler
+```bash
+kubectl apply -f kubernetes/hpa.yaml
+```
+
+### Verify Deployment
+
+```bash
+# Check pods
+kubectl get pods -n smarttech
+
+# Check services
+kubectl get svc -n smarttech
+
+# Check deployments
+kubectl get deployments -n smarttech
+
+# View logs
+kubectl logs -f deployment/smarttech-backend -n smarttech
+kubectl logs -f deployment/smarttech-frontend -n smarttech
+
+# Describe pod (for troubleshooting)
+kubectl describe pod <pod-name> -n smarttech
+```
+
+### Update Deployment
+
+```bash
+# Update image
+kubectl set image deployment/smarttech-backend \
+  backend=subodh40/smarttech-backend:new-tag \
+  -n smarttech
+
+# Check rollout status
+kubectl rollout status deployment/smarttech-backend -n smarttech
+
+# Rollback if needed
+kubectl rollout undo deployment/smarttech-backend -n smarttech
+```
+
+### Auto-Scaling
+
+The HPA configuration automatically scales:
+- **Backend**: 3-10 replicas (based on CPU/memory)
+- **Frontend**: 2-5 replicas (based on CPU/memory)
+
+View HPA status:
+```bash
+kubectl get hpa -n smarttech
+```
+
+### Using Deployment Script
+
+```bash
+# Make script executable
+chmod +x scripts/k8s-deploy.sh
+
+# Run deployment
+./scripts/k8s-deploy.sh
+```
+
+---
+
+## 🔄 Jenkins CI/CD Setup
+
+### Prerequisites
+
+1. **Jenkins Server** (2.400+ LTS)
+2. **Required Plugins**:
+   - Docker Pipeline
+   - Kubernetes CLI
+   - Git
+   - Pipeline
+
+### Step 1: Install Jenkins Plugins
+
+1. Go to **Jenkins Dashboard** → **Manage Jenkins** → **Plugins**
+2. Install:
+   - Docker Pipeline
+   - Kubernetes CLI
+   - Git
+   - Pipeline
+
+### Step 2: Configure Jenkins Credentials
+
+Go to **Jenkins Dashboard** → **Manage Jenkins** → **Credentials** → **System** → **Global credentials**
+
+#### Add Docker Hub Credentials
+
+1. Click **Add Credentials**
+2. Kind: **Username with password**
+3. ID: `docker-credentials`
+4. Username: Your Docker Hub username (`subodh40`)
+5. Password: Your Docker Hub password
+6. Click **OK**
+
+#### Add Docker Registry URL
+
+1. Click **Add Credentials**
+2. Kind: **Secret text**
+3. ID: `docker-registry-url`
+4. Secret: `subodh40` (your Docker Hub username)
+5. Click **OK**
+
+#### Add Kubernetes Config
+
+1. Click **Add Credentials**
+2. Kind: **Secret file**
+3. ID: `kubeconfig`
+4. File: Upload your `~/.kube/config` file
+5. Click **OK**
+
+### Step 3: Create Jenkins Pipeline
+
+1. Go to **Jenkins Dashboard** → **New Item**
+2. Enter name: `smarttech-connect-pipeline`
+3. Select **Pipeline**
+4. Click **OK**
+
+#### Configure Pipeline
+
+1. **Pipeline Definition**: Pipeline script from SCM
+2. **SCM**: Git
+3. **Repository URL**: Your Git repository URL
+4. **Credentials**: Add if repository is private
+5. **Branch**: `*/main` or `*/master`
+6. **Script Path**: `Jenkinsfile`
+7. Click **Save**
+
+### Step 4: Run Pipeline
+
+1. Click **Build Now** on the pipeline
+2. Monitor build progress in **Console Output**
+
+### Pipeline Stages
+
+The `Jenkinsfile` includes these stages:
+
+1. **Checkout** - Pulls code from Git
+2. **Build & Test Backend** - Installs dependencies, runs tests
+3. **Build & Test Frontend** - Builds React application
+4. **Build Docker Images** - Creates container images
+5. **Push Docker Images** - Uploads to Docker Hub
+6. **Security Scan** - Scans images for vulnerabilities (optional)
+7. **Deploy to Kubernetes** - Applies Kubernetes manifests
+8. **Health Check** - Verifies deployment health
+9. **Rollback** - Automatic rollback on failure
+
+### Automatic Triggers
+
+Configure webhooks for automatic builds:
+
+1. In your Git repository, add webhook:
+   - URL: `http://your-jenkins-url/github-webhook/`
+   - Events: Push, Pull Request
+
+2. In Jenkins pipeline, configure:
+   - **Build Triggers** → **GitHub hook trigger for GITScm polling**
+
+### Pipeline Environment Variables
+
+The pipeline uses these environment variables (set in Jenkins):
+- `DOCKER_REGISTRY`: Docker Hub username (`subodh40`)
+- `KUBERNETES_NAMESPACE`: Kubernetes namespace (`smarttech`)
+
+---
+
+## 🔐 Environment Variables
+
+### Backend Environment Variables
+
+Create `backend/.env`:
+
+```env
+# Server Configuration
+NODE_ENV=production
 PORT=5000
-ENABLE_DEMO_SEED=true
+
+# Database
+MONGODB_URI=mongodb://admin:password@mongodb:27017/smarttech_connect?authSource=admin
+
+# Authentication
+JWT_SECRET=your-secret-key-minimum-32-characters-long
+
+# Frontend URL
+FRONTEND_URL=https://app.smarttechconnect.com
+
+# Email Configuration (Optional)
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+EMAIL_FROM="SmartTech Connect <your-email@gmail.com>"
 ```
-- `ENABLE_DEMO_SEED` populates demo users/technicians/requests for testing.
-- Without `MONGODB_URI`, the backend spins up an in-memory MongoDB.
-- Frontend does not require env vars but accepts standard Vite `VITE_*` flags.
+
+### Frontend Environment Variables
+
+For production builds, set:
+```env
+VITE_API_URL=https://api.smarttechconnect.com
+```
+
+### Kubernetes Secrets
+
+Secrets are managed via Kubernetes Secrets (see [Kubernetes Deployment](#-kubernetes-deployment) section).
 
 ---
 
-## Available Scripts
+## 📚 API Documentation
 
-### Frontend (`frontend/`)
-| Command           | Description                                 |
-|-------------------|---------------------------------------------|
-| `npm run dev`     | Start Vite dev server                        |
-| `npm run build`   | Production build (outputs to `dist/`)        |
-| `npm run preview` | Preview the production build locally         |
+### Authentication Endpoints
 
-### Backend (`backend/`)
-| Command           | Description                                 |
-|-------------------|---------------------------------------------|
-| `npm run dev`     | Nodemon auto-reload server                   |
-| `npm start`       | Production server                            |
-| `npm run create-admin -- <email> <password> "Name"` | Promote or create an admin |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/send-otp` | Send OTP for registration/reset |
+| POST | `/api/auth/verify-otp` | Verify OTP code |
+| POST | `/api/auth/register` | Register new user |
+| POST | `/api/auth/login` | User login |
 
----
+### User Endpoints
 
-## Demo Accounts & Seed Data
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users/me` | Get current user profile |
+| PUT | `/api/users/me` | Update user profile |
+| PUT | `/api/users/me/password` | Change password |
 
-With `ENABLE_DEMO_SEED=true` on startup:
+### Service Request Endpoints
 
-| Role        | Email                     | Password     | Notes                                           |
-|-------------|---------------------------|--------------|-------------------------------------------------|
-| Customer    | `demo.user@example.com`   | `Demo@12345` | Pre-filled bookings & chat history              |
-| Technician  | `demo.tech@example.com`   | `Demo@12345` | Specialties, location, pending bookings         |
-| Admin       | `demo.admin@example.com`  | `Demo@12345` | Full dashboard access                           |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/service-requests` | List service requests |
+| POST | `/api/service-requests` | Create service request |
+| GET | `/api/service-requests/:id` | Get service request details |
+| PATCH | `/api/service-requests/:id/status` | Update request status |
 
-Disable the flag to remove demo artefacts for clean environments. KYC uploads reset unless already approved.
+### Technician Endpoints
 
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/technicians/available` | Get available technicians |
+| GET | `/api/technicians/me/profile` | Get technician profile |
+| PUT | `/api/technicians/me/profile` | Update technician profile |
+| GET | `/api/technicians/me/kyc` | Get KYC status |
+| POST | `/api/technicians/me/kyc` | Upload KYC documents |
 
-## API Overview
+### Dashboard Endpoints
 
-Key REST endpoints (`/api/*`):
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/dashboard/user` | User dashboard data |
+| GET | `/api/dashboard/technician` | Technician dashboard data |
 
-| Method & Path                                  | Purpose                                                            |
-|------------------------------------------------|--------------------------------------------------------------------|
-| `POST /api/auth/send-otp`                      | Issue OTP for registration/password reset                         |
-| `POST /api/auth/verify-otp`                    | Validate OTP                                                       |
-| `POST /api/auth/register` / `POST /auth/login` | Register or login users                                            |
-| `GET /api/users/me` / `PUT /api/users/me`      | Fetch/update authenticated profile                                |
-| `GET /api/dashboard/user`                      | Customer dashboard metrics                                         |
-| `GET /api/service-requests`                    | List requests (filtered by role + query params)                    |
-| `POST /api/service-requests`                   | Create a service request                                           |
-| `PATCH /api/service-requests/:id/status`       | Update status, final cost, technician assignment, review fields    |
-| `GET /api/service-requests/:id`                | Fetch single request                                               |
-| `GET /api/service-requests/conversations`      | Summaries for in-app messaging                                     |
-| `GET /api/service-requests/:id/messages`       | Paginated conversation history (marks incoming messages as read)   |
-| `POST /api/service-requests/:id/messages`      | Send message (text/image/location/booking update)                  |
-| `GET /api/service-requests/available`          | Technician job pool                                                |
-| `GET /api/technicians/available`               | Specialty + radius-based matching feed                             |
-| `GET/PUT /api/technicians/me/profile`          | Manage technician specialties, bio, rates, radius                  |
-| `GET /api/technicians/me/kyc` / `POST ...`     | Technician KYC status & uploads                                    |
-| `GET /api/help-center/*` / `POST /feedback`    | Help centre browsing & feedback                                    |
-| `POST /api/support/tickets` / `GET`            | Submit and list support tickets                                    |
-
-All protected routes expect `Authorization: Bearer <token>`.
+**All protected routes require**: `Authorization: Bearer <token>`
 
 ---
 
-## Frontend Routes
+## 🐛 Troubleshooting
 
-| Path                          | Description / Access                                                    |
-|-------------------------------|---------------------------------------------------------------------------|
-| `/`                           | Role-based landing redirect                                              |
-| `/user-login`                 | Unified login (OTP + password)                                           |
-| `/user-registration`          | Registration wizard with OTP verification                                |
-| `/forgot-password`            | Request + confirm reset                                                   |
-| `/user-dashboard`             | Customer dashboard (role `user`)                                         |
-| `/user-profile`               | Profile editor, KYC status, notification preferences                      |
-| `/service-request-creation`   | Request creation wizard (category, location, scheduling, surge pricing)   |
-| `/technician-selection`       | Technician list/map with specialty filtering and booking request flow     |
-| `/technician-dashboard`       | Technician dashboards, live jobs, availability toggle                     |
-| `/booking-management`         | Manage customer bookings (reschedule, cancel, review)                     |
-| `/chat-communication`         | Full messaging experience (requires authenticated user or technician)     |
-| `/live-tracking`              | Real-time tracking for the active/pending booking                         |
-| `/help` / `/help-center`      | Help centre and support ticket entry                                     |
-| `/admin-dashboard`            | Admin control panel (role `admin`)                                       |
+### Docker Issues
+
+**Problem**: Port already in use
+```bash
+# Find process using port
+lsof -i :5000
+# or
+netstat -tulpn | grep :5000
+
+# Kill process
+kill <PID>
+
+# Or change port in docker-compose.yml
+```
+
+**Problem**: Container won't start
+```bash
+# Check logs
+docker-compose logs backend
+docker-compose logs frontend
+
+# Check container status
+docker-compose ps
+
+# Restart services
+docker-compose restart
+```
+
+**Problem**: Image pull errors
+```bash
+# Login to Docker Hub
+docker login
+
+# Pull images manually
+docker pull subodh40/smarttech-backend:latest
+docker pull subodh40/smarttech-frontend:latest
+```
+
+### Kubernetes Issues
+
+**Problem**: Pods not starting
+```bash
+# Check pod status
+kubectl get pods -n smarttech
+
+# Describe pod for details
+kubectl describe pod <pod-name> -n smarttech
+
+# Check logs
+kubectl logs <pod-name> -n smarttech
+
+# Check events
+kubectl get events -n smarttech --sort-by='.lastTimestamp'
+```
+
+**Problem**: Image pull errors
+```bash
+# Verify image exists in registry
+docker pull subodh40/smarttech-backend:latest
+
+# Check imagePullPolicy in deployment
+kubectl get deployment smarttech-backend -n smarttech -o yaml | grep imagePullPolicy
+
+# Create image pull secret if using private registry
+kubectl create secret docker-registry regcred \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=subodh40 \
+  --docker-password=<your-password> \
+  -n smarttech
+```
+
+**Problem**: Services not accessible
+```bash
+# Check service endpoints
+kubectl get endpoints -n smarttech
+
+# Check service configuration
+kubectl get svc -n smarttech
+kubectl describe svc smarttech-backend -n smarttech
+
+# Port forward for testing
+kubectl port-forward svc/smarttech-backend 5000:5000 -n smarttech
+```
+
+**Problem**: MongoDB connection issues
+```bash
+# Check MongoDB pod
+kubectl get pods -l app=mongodb -n smarttech
+
+# Check MongoDB logs
+kubectl logs -l app=mongodb -n smarttech
+
+# Verify MongoDB URI in secrets
+kubectl get secret smarttech-secrets -n smarttech -o jsonpath='{.data.mongodb-uri}' | base64 -d
+```
+
+### Jenkins Issues
+
+**Problem**: Pipeline fails at Docker build
+- Verify Docker daemon is running on Jenkins server
+- Check Docker credentials are correct
+- Ensure Jenkins user has Docker permissions
+
+**Problem**: Kubernetes deployment fails
+- Verify kubeconfig is correct
+- Check namespace exists: `kubectl get namespace smarttech`
+- Verify secrets are created
+- Check Jenkins has kubectl access
+
+**Problem**: Build hangs
+- Check Jenkins server resources (CPU, memory)
+- Review pipeline logs for specific error
+- Verify network connectivity to Docker Hub
+
+### General Issues
+
+**Problem**: Health checks failing
+```bash
+# Test backend health
+curl http://localhost:5000/api/health
+
+# Test frontend health
+curl http://localhost/health
+
+# Check health check configuration in deployment
+kubectl get deployment smarttech-backend -n smarttech -o yaml | grep -A 10 livenessProbe
+```
+
+**Problem**: Database connection errors
+- Verify MongoDB URI is correct
+- Check MongoDB is running and accessible
+- Verify network connectivity
+- Check firewall rules
 
 ---
 
-## Key Workflows
+## 📝 Contributing
 
-### Booking Flow
-1. Customer submits request with category, description (>=30 chars), budget, schedule.
-2. Backend stores request with computed surge pricing and matches technicians by specialty & radius.
-3. Customer reviews technicians (distance, ETA, surge rate) and submits a **pending** booking request.
-4. Technician sees pending job, accepts/declines, and updates status (confirmed → in progress → completed).
-5. Customer monitors status in Booking Management and Live Tracking; can reschedule, cancel with refund guidance, or review after completion.
-
-### Messaging
-1. Each service request has an embedded conversation array.
-2. `/conversations` returns lightweight cards (participant, booking summary, unread count).
-3. `/messages` returns chronological history, marking inbound messages as read.
-4. `/messages` POST supports `text`, `image` (base64 or URL), `location` (lat/lng), and `booking_update` types.
-5. Frontend chat renders status indicators, location previews, image previews, and quick actions.
-
-### Technician Specialties & KYC
-1. Technician edits specialties/experience/radius via `/api/technicians/me/profile`.
-2. Matching service ensures only relevant technicians appear for a given category.
-3. KYC uploads (gov ID + selfie) stored under `/uploads/kyc`, with statuses reflected across dashboards.
-4. Until KYC is approved, technicians cannot toggle availability or accept jobs.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
-## Development Notes
-- **Proxy configuration**: update `frontend/vite.config.mjs` if backend host/port changes.
-- **Uploads**: ensure `/uploads/kyc` exists and is writable in production deployments.
-- **Mongo Memory fallback**: great for local development; disable for production.
-- **Error handling**: API errors conform to `{ error: string }` responses, simplifying frontend alerts.
-- **Rupee formatting**: all monetary displays rely on `toLocaleString('en-IN')` for currency consistency.
+## 📄 License
+
+This project is licensed under the ISC License.
 
 ---
 
-## Roadmap Ideas
-- Admin moderation UI for approving KYC documents and responding to tickets in-app.
-- Real-time notifications via WebSockets (booking updates, message receipts).
-- Payment integration for deposits and invoices.
-- Automated testing (unit + integration) and CI pipeline.
-- Infrastructure-as-code + Dockerisation for reproducible deployments.
+## 🔗 Links
+
+- **Docker Hub**: https://hub.docker.com/repositories/subodh40
+- **GitHub Repository**: https://github.com/subodh-001/smarttech_connect-main
+- **Deployment Guide**: See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions
 
 ---
+
+## 📞 Support
+
+For issues or questions:
+1. Check [Troubleshooting](#-troubleshooting) section
+2. Review [DEPLOYMENT.md](./DEPLOYMENT.md)
+3. Open an issue on GitHub
+
+---
+
+## 🎯 Roadmap
+
+- [x] Docker containerization
+- [x] Kubernetes orchestration
+- [x] Jenkins CI/CD pipeline
+- [ ] WebSocket real-time notifications
+- [ ] Payment integration
+- [ ] Automated testing suite
+- [ ] Monitoring and logging (Prometheus, Grafana)
+- [ ] Admin moderation UI
+
+---
+
+**Made with ❤️ for connecting households with trusted technicians**
 
 Happy building! 🚀

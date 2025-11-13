@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: smarttech
+  labels:
+    name: smarttech
+    environment: production
+

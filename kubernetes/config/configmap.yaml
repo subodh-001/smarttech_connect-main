@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smarttech-config
+  namespace: smarttech
+data:
+  frontend-url: "https://app.smarttechconnect.com"
+  api-url: "https://api.smarttechconnect.com"
+  mongodb-database: "smarttech_connect"
+  node-env: "production"
+
