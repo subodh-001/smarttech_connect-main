@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import RegistrationHeader from './components/RegistrationHeader';
-import GoogleSignIn from './components/GoogleSignIn';
 import RegistrationForm from './components/RegistrationForm';
 import OTPVerificationModal from './components/OTPVerificationModal';
 
@@ -50,43 +49,6 @@ const UserRegistration = () => {
     }
   };
 
-  const handleGoogleSignIn = async ({ code, mockProfile }) => {
-    if (!code && !mockProfile) {
-      alert('Google sign-in failed to provide authentication details. Please try again.');
-      return;
-    }
-
-    setIsLoading(true);
-    
-    try {
-      const payload = mockProfile ? { mockProfile } : { code };
-      const response = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result?.error || 'Failed to sign in with Google.');
-      }
-
-      if (result?.token) {
-        localStorage.setItem('authToken', result.token);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${result.token}`;
-      }
-      
-      if (result?.user?.role === 'technician') {
-        navigate('/technician-onboarding');
-      } else {
-        navigate('/user-dashboard');
-      }
-    } catch (error) {
-      console.error('Google sign-in failed:', error);
-      alert(error?.message || 'We could not complete Google sign-in. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleOTPVerification = async (otp) => {
     if (!registrationData) {
@@ -106,12 +68,15 @@ const UserRegistration = () => {
         throw new Error(verifyResult.error || 'Failed to verify OTP.');
       }
 
+      // Get role from form data or localStorage (fallback)
+      const selectedRole = registrationData.userType || localStorage.getItem('selectedRole') || 'user';
+      
       const registerPayload = {
         email: registrationData.email,
         password: registrationData.password,
         fullName: registrationData.fullName,
         phone: registrationData.phone,
-        role: registrationData.userType === 'technician' ? 'technician' : 'user',
+        role: selectedRole === 'technician' ? 'technician' : 'user',
         address: registrationData.address || '',
         city: registrationData.city || '',
         state: registrationData.state || '',
@@ -247,17 +212,10 @@ const UserRegistration = () => {
           <div className="w-full max-w-md space-y-8">
             <RegistrationHeader />
             
-            <div className="space-y-6">
-              <GoogleSignIn 
-                onGoogleSignIn={handleGoogleSignIn}
-                isLoading={isLoading}
-              />
-              
-              <RegistrationForm 
-                onSubmit={handleFormSubmit}
-                isLoading={isLoading}
-              />
-            </div>
+            <RegistrationForm 
+              onSubmit={handleFormSubmit}
+              isLoading={isLoading}
+            />
           </div>
         </div>
       </div>

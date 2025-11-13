@@ -20,6 +20,7 @@ import BookingManagement from './pages/booking-management';
 import ChatCommunication from './pages/chat-communication';
 import ForgotPassword from './pages/forgot-password';
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleSelectionPage from './pages/role-selection';
 
 const Routes = () => {
   return (
@@ -70,10 +71,11 @@ const RootRedirect = () => {
     );
   }
 
-  let target = '/user-login';
+  // If user is logged in, redirect to their dashboard
   if (user) {
     const roleRaw = user.role || user.type;
     const role = roleRaw === 'customer' ? 'user' : roleRaw;
+    let target = '/user-dashboard';
     switch (role) {
       case 'user':
         target = '/user-dashboard';
@@ -87,6 +89,9 @@ const RootRedirect = () => {
       default:
         target = '/user-dashboard';
     }
+    return <Navigate to={target} replace />;
   }
-  return <Navigate to={target} replace />;
+
+  // If user is not logged in, show role selection page
+  return <RoleSelectionPage />;
 };

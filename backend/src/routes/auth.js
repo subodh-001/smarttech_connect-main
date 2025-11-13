@@ -345,7 +345,9 @@ const formatAuthResponse = (user, token, extras = {}) => ({
 
 router.post('/google', async (req, res) => {
   try {
-    const { code, mockProfile } = req.body || {};
+    const { code, mockProfile, role } = req.body || {};
+    // Get role from request body or default to 'user'
+    const userRole = role === 'technician' ? 'technician' : 'user';
 
     if ((!googleClientId || !googleClientSecret) && mockProfile) {
       try {
@@ -356,7 +358,7 @@ router.post('/google', async (req, res) => {
           googleId: mockProfile.googleId || `mock-google-${Date.now()}`,
         };
 
-        const user = await findOrCreateGoogleUser(profile);
+        const user = await findOrCreateGoogleUser(profile, userRole);
         const token = signToken(user);
         return res.json(formatAuthResponse(user, token, { mocked: true }));
       } catch (mockError) {
@@ -392,7 +394,7 @@ router.post('/google', async (req, res) => {
       return res.status(400).json({ error: 'Google account is missing a verified email address.' });
     }
 
-    const user = await findOrCreateGoogleUser({ email, name, picture, googleId });
+    const user = await findOrCreateGoogleUser({ email, name, picture, googleId }, userRole);
 
     const token = signToken(user);
     return res.json(formatAuthResponse(user, token));

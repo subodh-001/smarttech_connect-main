@@ -5,8 +5,10 @@ import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import Select from '../../../components/ui/Select';
-
 const RegistrationForm = ({ onSubmit, isLoading }) => {
+  // Get selected role from localStorage (set by role selection page)
+  const selectedRole = localStorage.getItem('selectedRole') || '';
+  
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -17,7 +19,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
     postalCode: '',
     password: '',
     confirmPassword: '',
-    userType: '',
+    userType: selectedRole || '', // Use selectedRole from localStorage
     agreeToTerms: false,
     agreeToPrivacy: false,
     allowLocationAccess: false
@@ -471,6 +473,7 @@ const RegistrationForm = ({ onSubmit, isLoading }) => {
           Already have an account? <Link to="/user-login" className="text-primary hover:text-primary/80">Sign in</Link>
         </p>
       </div>
+
     </form>
   );
 };

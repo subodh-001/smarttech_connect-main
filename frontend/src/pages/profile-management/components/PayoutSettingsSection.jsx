@@ -643,15 +643,15 @@ const PayoutSettingsSection = ({ userProfile }) => {
             </Button>
           )}
           {!showChangePIN && (
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={saving || payoutMethod === 'none'}
-              iconName={saving ? 'Loader' : 'Save'}
-              iconPosition="left"
-            >
-              {saving ? 'Saving...' : 'Save Settings'}
-            </Button>
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            disabled={saving || payoutMethod === 'none'}
+            iconName={saving ? 'Loader' : 'Save'}
+            iconPosition="left"
+          >
+            {saving ? 'Saving...' : 'Save Settings'}
+          </Button>
           )}
         </div>
       </div>

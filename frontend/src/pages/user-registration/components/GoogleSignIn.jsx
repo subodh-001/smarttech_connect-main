@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import Button from '../../../components/ui/Button';
 
-const GoogleSignIn = ({ onGoogleSignIn, isLoading }) => {
+const GoogleSignIn = ({ onGoogleSignIn, isLoading, showSeparator = true, compact = false }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const isGoogleConfigured = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
@@ -78,15 +78,17 @@ const GoogleSignIn = ({ onGoogleSignIn, isLoading }) => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border"></div>
+    <div className={compact ? "space-y-3" : "space-y-4"}>
+      {showSeparator && (
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-border"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-background text-muted-foreground">Or continue with</span>
+          </div>
         </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-4 bg-card text-muted-foreground">Or continue with</span>
-        </div>
-      </div>
+      )}
 
       <Button
         type="button"
@@ -99,25 +101,30 @@ const GoogleSignIn = ({ onGoogleSignIn, isLoading }) => {
         iconName="Chrome"
         iconPosition="left"
         iconSize={20}
+        className="w-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium"
       >
         Continue with Google
       </Button>
-
-      {(!isGoogleConfigured) && (
-        <p className="text-xs text-muted-foreground text-center">
-          Google OAuth isn’t configured yet, so we’ll simulate Google sign-in for local testing.
-        </p>
-      )}
 
       {error && (
         <p className="text-xs text-destructive text-center">{error}</p>
       )}
 
-      <div className="text-center">
-        <p className="text-xs text-muted-foreground">
-          By signing up with Google, you confirm that you accept our Terms of Service and Privacy Policy.
-        </p>
-      </div>
+      {!compact && (
+        <>
+          {(!isGoogleConfigured) && (
+            <p className="text-xs text-muted-foreground text-center">
+              Google OAuth isn't configured yet, so we'll simulate Google sign-in for local testing.
+            </p>
+          )}
+
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground">
+              By signing up with Google, you confirm that you accept our Terms of Service and Privacy Policy.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 };
