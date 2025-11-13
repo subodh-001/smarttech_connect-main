@@ -109,9 +109,21 @@ const SecuritySection = ({ securitySettings, onUpdateSecurity }) => {
 
       if (response.data?.message) {
         // Update password changed date
-        if (response.data?.passwordChangedAt) {
-          setPasswordChangedDate(response.data.passwordChangedAt);
-        }
+        const newPasswordDate = response.data?.passwordChangedAt || new Date().toISOString();
+        setPasswordChangedDate(newPasswordDate);
+        
+        // Add password change event to recent activity
+        const newActivity = {
+          id: `pwd-change-${Date.now()}`,
+          action: 'Password changed',
+          type: 'password_change',
+          timestamp: newPasswordDate,
+          location: 'Unknown', // Could be fetched from IP geolocation in future
+          device: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                 navigator.userAgent.includes('Firefox') ? 'Firefox' : 
+                 navigator.userAgent.includes('Safari') ? 'Safari' : 'Unknown Browser',
+        };
+        setRecentActivity((prev) => [newActivity, ...prev].slice(0, 10)); // Keep last 10 activities
         
         // Refresh user profile to get updated passwordChangedAt
         if (fetchUserProfile) {
@@ -193,7 +205,7 @@ const SecuritySection = ({ securitySettings, onUpdateSecurity }) => {
   const [recentActivity, setRecentActivity] = useState([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
 
-  // Fetch recent security activity from API
+  // Fetch recent security activity and include password change events
   useEffect(() => {
     const fetchActivity = async () => {
       setLoadingActivity(true);
@@ -201,7 +213,24 @@ const SecuritySection = ({ securitySettings, onUpdateSecurity }) => {
         // TODO: Replace with actual API endpoint when available
         // const { data } = await axios.get('/api/users/me/security-activity');
         // setRecentActivity(data || []);
-        setRecentActivity([]); // Empty until API is implemented
+        
+        // For now, build activity from passwordChangedAt if available
+        const activities = [];
+        if (passwordChangedDate || userProfile?.password_changed_at) {
+          const pwdDate = passwordChangedDate || userProfile?.password_changed_at;
+          activities.push({
+            id: 'pwd-change',
+            action: 'Password changed',
+            type: 'password_change',
+            timestamp: pwdDate,
+            location: 'Unknown', // Could be fetched from IP geolocation in future
+            device: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                   navigator.userAgent.includes('Firefox') ? 'Firefox' : 
+                   navigator.userAgent.includes('Safari') ? 'Safari' : 'Unknown Browser',
+          });
+        }
+        
+        setRecentActivity(activities);
       } catch (error) {
         console.error('Failed to fetch security activity:', error);
         setRecentActivity([]);
@@ -210,7 +239,7 @@ const SecuritySection = ({ securitySettings, onUpdateSecurity }) => {
       }
     };
     fetchActivity();
-  }, []);
+  }, [passwordChangedDate, userProfile?.password_changed_at]);
 
   return (
     <div className="bg-surface border border-border rounded-lg p-6">
