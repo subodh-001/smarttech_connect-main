@@ -5,7 +5,7 @@ import Button from '../../../components/ui/Button';
 import ChangePhotoModal from './ChangePhotoModal';
 import { useAuth } from '../../../contexts/NewAuthContext';
 
-const ProfileHeader = ({ userProfile, onProfilePhotoUpdate }) => {
+const ProfileHeader = ({ userProfile, onProfilePhotoUpdate, onStatCardClick }) => {
   const { user } = useAuth();
   const [imageError, setImageError] = useState(false);
   const [showChangePhotoModal, setShowChangePhotoModal] = useState(false);
@@ -138,38 +138,56 @@ const ProfileHeader = ({ userProfile, onProfilePhotoUpdate }) => {
 
           {/* Account Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 pt-4 border-t border-slate-200">
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <button
+              onClick={() => onStatCardClick && onStatCardClick('activeJobs')}
+              className={`flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all ${
+                onStatCardClick ? 'hover:bg-slate-50 hover:border-primary/30 hover:shadow-md cursor-pointer' : ''
+              }`}
+              disabled={!onStatCardClick}
+            >
               <div className="rounded-md bg-blue-100 p-2 text-blue-600">
                 <Icon name="Activity" size={18} />
               </div>
-              <div>
+              <div className="text-left">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Active jobs</p>
                 <p className="text-lg font-semibold text-slate-900">{userProfile?.stats?.activeJobs ?? 0}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            </button>
+            <button
+              onClick={() => onStatCardClick && onStatCardClick('completed')}
+              className={`flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all ${
+                onStatCardClick ? 'hover:bg-slate-50 hover:border-primary/30 hover:shadow-md cursor-pointer' : ''
+              }`}
+              disabled={!onStatCardClick}
+            >
               <div className="rounded-md bg-blue-100 p-2 text-blue-600">
                 <Icon name="CheckCircle2" size={18} />
               </div>
-              <div>
+              <div className="text-left">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Completed</p>
                 <p className="text-lg font-semibold text-slate-900">{userProfile?.stats?.completedServices ?? 0}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            </button>
+            <button
+              onClick={() => onStatCardClick && onStatCardClick('totalBookings')}
+              className={`flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all ${
+                onStatCardClick ? 'hover:bg-slate-50 hover:border-primary/30 hover:shadow-md cursor-pointer' : ''
+              }`}
+              disabled={!onStatCardClick}
+            >
               <div className="rounded-md bg-blue-100 p-2 text-blue-600">
                 <Icon name="Calendar" size={18} />
               </div>
-              <div>
+              <div className="text-left">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total bookings</p>
                 <p className="text-lg font-semibold text-slate-900">{userProfile?.stats?.totalBookings ?? 0}</p>
               </div>
-            </div>
+            </button>
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <div className="rounded-md bg-blue-100 p-2 text-blue-600">
                 <Icon name="Clock" size={18} />
               </div>
-              <div>
+              <div className="text-left">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Member since</p>
                 <p className="text-lg font-semibold text-slate-900">{userProfile?.stats?.memberSince || '—'}</p>
               </div>

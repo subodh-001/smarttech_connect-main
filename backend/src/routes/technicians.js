@@ -2,7 +2,10 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
+import bcrypt from 'bcryptjs';
 import Technician from '../models/Technician.js';
+import ServiceRequest from '../models/ServiceRequest.js';
+import Withdrawal from '../models/Withdrawal.js';
 import authMiddleware from '../middleware/auth.js';
 import { findAvailableTechnicians } from '../services/technicianMatching.js';
 import { TECHNICIAN_SPECIALTIES, SPECIALTY_LABEL_MAP } from '../constants/technicianSpecialties.js';
@@ -98,6 +101,7 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
         certifications: technician.certifications || [],
         payoutMethod: technician.payoutMethod || 'none',
         upiId: technician.upiId || null,
+        withdrawalPIN: technician.withdrawalPIN ? true : false, // Return boolean to indicate if PIN is set (not the actual PIN)
         bankAccountName: technician.bankAccountName || null,
         bankAccountNumber: technician.bankAccountNumber || null,
         bankIfscCode: technician.bankIfscCode || null,
@@ -169,6 +173,29 @@ router.put('/me/profile', authMiddleware, async (req, res) => {
 
     if (payload.upiId !== undefined) {
       updates.upiId = typeof payload.upiId === 'string' ? payload.upiId.trim() : null;
+    }
+
+    // Handle withdrawal PIN (4-digit PIN for withdrawal security)
+    if (payload.withdrawalPIN !== undefined) {
+      if (typeof payload.withdrawalPIN !== 'string' || payload.withdrawalPIN.length !== 4 || !/^\d{4}$/.test(payload.withdrawalPIN)) {
+        return res.status(400).json({ error: 'Withdrawal PIN must be exactly 4 digits' });
+      }
+      
+      // If old PIN is provided, verify it before updating
+      if (payload.oldWithdrawalPIN !== undefined) {
+        const technician = await Technician.findOne({ userId: req.user.sub });
+        if (!technician || !technician.withdrawalPIN) {
+          return res.status(400).json({ error: 'Current PIN not found. Please set a new PIN.' });
+        }
+        
+        const isOldPINValid = await bcrypt.compare(payload.oldWithdrawalPIN, technician.withdrawalPIN);
+        if (!isOldPINValid) {
+          return res.status(401).json({ error: 'Current PIN is incorrect. Please try again.' });
+        }
+      }
+      
+      // Hash the new PIN before storing
+      updates.withdrawalPIN = await bcrypt.hash(payload.withdrawalPIN, 10);
     }
 
     if (payload.bankAccountName !== undefined) {
@@ -319,6 +346,177 @@ router.post('/me/kyc', authMiddleware, (req, res) => {
       res.status(500).json({ error: 'Failed to submit verification document. Please try again.' });
     }
   });
+});
+
+// Get available balance
+router.get('/me/balance', authMiddleware, async (req, res) => {
+  if (!ensureTechnicianRole(req, res)) return;
+
+  try {
+    const technician = await Technician.findOne({ userId: req.user.sub });
+    if (!technician) {
+      return res.status(404).json({ error: 'Technician profile not found' });
+    }
+
+    // Calculate total earnings from completed jobs
+    const completedJobs = await ServiceRequest.find({
+      technicianId: req.user.sub,
+      status: 'completed',
+    }).select('finalCost budgetMax budgetMin');
+
+    let totalEarnings = 0;
+    completedJobs.forEach((job) => {
+      const amount = job.finalCost ?? job.budgetMax ?? job.budgetMin ?? 0;
+      totalEarnings += amount;
+    });
+
+    // Calculate total withdrawn
+    const withdrawals = await Withdrawal.find({
+      userId: req.user.sub,
+      status: { $in: ['pending', 'processing', 'completed'] },
+    }).select('amount');
+
+    let totalWithdrawn = 0;
+    withdrawals.forEach((withdrawal) => {
+      totalWithdrawn += withdrawal.amount;
+    });
+
+    const availableBalance = Math.max(0, totalEarnings - totalWithdrawn);
+
+    res.json({
+      totalEarnings,
+      totalWithdrawn,
+      availableBalance,
+    });
+  } catch (error) {
+    console.error('Failed to calculate balance:', error);
+    res.status(500).json({ error: 'Failed to calculate balance' });
+  }
+});
+
+// Process withdrawal
+router.post('/me/withdraw', authMiddleware, async (req, res) => {
+  if (!ensureTechnicianRole(req, res)) return;
+
+  try {
+    const { amount, upiId, withdrawalPIN } = req.body;
+
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    if (amount < 100) {
+      return res.status(400).json({ error: 'Minimum withdrawal amount is ₹100' });
+    }
+
+    if (!upiId || typeof upiId !== 'string' || upiId.trim() === '') {
+      return res.status(400).json({ error: 'UPI ID is required' });
+    }
+
+    // Validate UPI ID format
+    const upiPattern = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
+    if (!upiPattern.test(upiId.trim())) {
+      return res.status(400).json({ error: 'Invalid UPI ID format' });
+    }
+
+    const technician = await Technician.findOne({ userId: req.user.sub });
+    if (!technician) {
+      return res.status(404).json({ error: 'Technician profile not found' });
+    }
+
+    // Verify withdrawal PIN
+    if (!technician.withdrawalPIN) {
+      return res.status(400).json({ 
+        error: 'Withdrawal PIN not set. Please set your 4-digit PIN in your profile settings.' 
+      });
+    }
+
+    if (!withdrawalPIN || typeof withdrawalPIN !== 'string' || withdrawalPIN.length !== 4 || !/^\d{4}$/.test(withdrawalPIN)) {
+      return res.status(400).json({ error: 'Invalid withdrawal PIN. Please enter a 4-digit PIN.' });
+    }
+
+    const isPINValid = await bcrypt.compare(withdrawalPIN, technician.withdrawalPIN);
+    if (!isPINValid) {
+      return res.status(401).json({ error: 'Incorrect withdrawal PIN. Please try again.' });
+    }
+
+    // Calculate available balance
+    const completedJobs = await ServiceRequest.find({
+      technicianId: req.user.sub,
+      status: 'completed',
+    }).select('finalCost budgetMax budgetMin');
+
+    let totalEarnings = 0;
+    completedJobs.forEach((job) => {
+      const amount = job.finalCost ?? job.budgetMax ?? job.budgetMin ?? 0;
+      totalEarnings += amount;
+    });
+
+    const withdrawals = await Withdrawal.find({
+      userId: req.user.sub,
+      status: { $in: ['pending', 'processing', 'completed'] },
+    }).select('amount');
+
+    let totalWithdrawn = 0;
+    withdrawals.forEach((withdrawal) => {
+      totalWithdrawn += withdrawal.amount;
+    });
+
+    const availableBalance = Math.max(0, totalEarnings - totalWithdrawn);
+
+    if (amount > availableBalance) {
+      return res.status(400).json({
+        error: `Insufficient balance. Available: ₹${availableBalance.toLocaleString('en-IN')}`,
+      });
+    }
+
+    // Update technician UPI ID if different
+    if (technician.upiId !== upiId.trim()) {
+      technician.upiId = upiId.trim();
+      await technician.save();
+    }
+
+    // Create withdrawal record
+    const withdrawal = await Withdrawal.create({
+      technicianId: technician._id,
+      userId: req.user.sub,
+      amount: parseFloat(amount),
+      upiId: upiId.trim(),
+      status: 'pending',
+    });
+
+    res.json({
+      success: true,
+      message: 'Withdrawal request submitted successfully',
+      withdrawal: {
+        id: withdrawal._id,
+        amount: withdrawal.amount,
+        status: withdrawal.status,
+        transactionId: withdrawal.transactionId,
+        createdAt: withdrawal.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to process withdrawal:', error);
+    res.status(500).json({ error: 'Failed to process withdrawal. Please try again.' });
+  }
+});
+
+// Get withdrawal history
+router.get('/me/withdrawals', authMiddleware, async (req, res) => {
+  if (!ensureTechnicianRole(req, res)) return;
+
+  try {
+    const withdrawals = await Withdrawal.find({ userId: req.user.sub })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    res.json(withdrawals);
+  } catch (error) {
+    console.error('Failed to fetch withdrawals:', error);
+    res.status(500).json({ error: 'Failed to fetch withdrawal history' });
+  }
 });
 
 // Update technician by id

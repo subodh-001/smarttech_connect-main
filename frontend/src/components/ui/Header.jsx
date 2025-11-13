@@ -288,7 +288,7 @@ const Header = ({
                     {role === 'technician' ? (
                       <>
                         <Link
-                          to="/profile-management"
+                          to="/account"
                           className="flex items-center space-x-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white"
                           onClick={() => setIsProfileDropdownOpen(false)}
                         >

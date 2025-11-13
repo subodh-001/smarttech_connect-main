@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Icon from '../../components/AppIcon';
 import ProfileHeader from '../profile-management/components/ProfileHeader';
+import JobDetailsModal from '../profile-management/components/JobDetailsModal';
 import { useAuth } from '../../contexts/NewAuthContext';
 import {
   Mail,
@@ -107,6 +108,10 @@ const UserProfile = () => {
   const [activeServices, setActiveServices] = useState([]);
   const [recentBookings, setRecentBookings] = useState([]);
   const [stats, setStats] = useState(null);
+  const [allServices, setAllServices] = useState([]);
+  const [jobModalOpen, setJobModalOpen] = useState(false);
+  const [jobModalFilter, setJobModalFilter] = useState(null);
+  const [jobModalTitle, setJobModalTitle] = useState('Job Details');
   const [fetchingDashboard, setFetchingDashboard] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -162,15 +167,28 @@ const UserProfile = () => {
           const active = requests
             .filter((request) => activeStatusSet.has(request.status))
             .map((request) => ({
-              id: request.id,
+              id: request.id || request._id,
+              _id: request._id || request.id,
+              title: request.title || request.category,
               category: request.title || request.category,
+              service: request.service,
+              description: request.description,
               location: request.locationAddress,
+              locationAddress: request.locationAddress,
               status: request.status,
+              scheduledDate: request.scheduledDate,
+              createdAt: request.createdAt,
+              updatedAt: request.updatedAt,
+              finalCost: request.finalCost,
+              budgetMax: request.budgetMax,
+              budgetMin: request.budgetMin,
+              amount: request.finalCost || request.budgetMax || request.budgetMin || null,
               technician: request.technician || null,
               customer: request.customer || null,
+              customerId: request.customerId,
+              technicianId: request.technicianId,
               partyLabel: 'Customer',
-              partyName: request.customer?.name || request.customer?.email || 'Customer',
-              amount: request.finalCost || request.budgetMax || request.budgetMin || null,
+              partyName: request.customer?.name || request.customer?.fullName || request.customerId?.name || request.customer?.email || 'Customer',
             }));
 
           const completed = requests
@@ -178,15 +196,61 @@ const UserProfile = () => {
             .sort((a, b) => new Date(b.updatedAt || b.completionDate || 0) - new Date(a.updatedAt || a.completionDate || 0));
 
           const recent = completed.slice(0, 5).map((request) => ({
-            id: request.id,
+            id: request.id || request._id,
+            _id: request._id || request.id,
+            title: request.title || request.category,
             category: request.title || request.category,
+            service: request.service,
+            description: request.description,
+            locationAddress: request.locationAddress,
             status: request.status,
+            scheduledDate: request.scheduledDate,
+            createdAt: request.createdAt,
+            updatedAt: request.updatedAt,
+            completionDate: request.completionDate,
+            finalCost: request.finalCost,
+            budgetMax: request.budgetMax,
+            budgetMin: request.budgetMin,
+            amount: request.finalCost || request.budgetMax || request.budgetMin || null,
             technician: request.technician || null,
             customer: request.customer || null,
+            customerId: request.customerId,
+            technicianId: request.technicianId,
             partyLabel: 'Customer',
-            partyName: request.customer?.name || request.customer?.email || 'Customer',
-            amount: request.finalCost || request.budgetMax || request.budgetMin || null,
+            partyName: request.customer?.name || request.customer?.fullName || request.customerId?.name || request.customer?.email || 'Customer',
+            reviewRating: request.reviewRating,
+            reviewComment: request.reviewComment,
           }));
+
+          // Format all services for modal display
+          const formattedServices = requests.map((request) => ({
+            id: request.id || request._id,
+            _id: request._id || request.id,
+            title: request.title || request.category,
+            category: request.category,
+            service: request.service,
+            status: request.status,
+            description: request.description,
+            locationAddress: request.locationAddress || request.location,
+            scheduledDate: request.scheduledDate,
+            createdAt: request.createdAt,
+            updatedAt: request.updatedAt,
+            completionDate: request.completionDate,
+            finalCost: request.finalCost,
+            budgetMax: request.budgetMax,
+            budgetMin: request.budgetMin,
+            amount: request.finalCost || request.budgetMax || request.budgetMin,
+            customer: request.customer,
+            customerId: request.customerId,
+            technician: request.technician,
+            technicianId: request.technicianId,
+            partyLabel: 'Customer',
+            partyName: request.customer?.name || request.customer?.fullName || request.customerId?.name || request.customer?.email || 'Customer',
+            reviewRating: request.reviewRating,
+            reviewComment: request.reviewComment,
+          }));
+
+          setAllServices(formattedServices);
 
           const totalEarned = completed.reduce((sum, request) => sum + (request.finalCost || 0), 0);
           const averageRating =
@@ -200,6 +264,7 @@ const UserProfile = () => {
           setActiveServices(active);
           setRecentBookings(recent);
           setStats({
+            activeJobs: active.length,
             totalBookings: requests.length,
             completedServices: completed.length,
             totalSpent: Number(totalEarned.toFixed(0)),
@@ -210,18 +275,77 @@ const UserProfile = () => {
           const { data } = await axios.get('/api/dashboard/user', { headers });
           const normalizedActive = (data?.activeServices ?? []).map((service) => ({
             ...service,
+            id: service.id || service._id,
+            _id: service._id || service.id,
+            title: service.title || service.category || service.service,
+            locationAddress: service.locationAddress || service.location,
             partyLabel: 'Technician',
-            partyName: service?.technician?.name || null,
+            partyName: service?.technician?.name || service?.technicianId?.name || null,
           }));
           const normalizedRecent = (data?.recentBookings ?? []).slice(0, 5).map((booking) => ({
             ...booking,
+            id: booking.id || booking._id,
+            _id: booking._id || booking.id,
+            title: booking.title || booking.category || booking.service,
+            locationAddress: booking.locationAddress || booking.location,
             partyLabel: 'Technician',
-            partyName: booking?.technician?.name || null,
+            partyName: booking?.technician?.name || booking?.technicianId?.name || null,
           }));
 
           setActiveServices(normalizedActive);
           setRecentBookings(normalizedRecent);
-        setStats(data?.stats ?? null);
+          
+          // Format all services for modal display
+          const activeServicesFormatted = (data?.activeServices || []).map((service) => ({
+            id: service.id || service._id,
+            _id: service._id || service.id,
+            title: service.title || service.category || service.service,
+            category: service.category,
+            service: service.service,
+            status: service.status,
+            description: service.description,
+            locationAddress: service.locationAddress,
+            scheduledDate: service.scheduledDate,
+            createdAt: service.createdAt,
+            updatedAt: service.updatedAt,
+            completionDate: service.completionDate,
+            finalCost: service.finalCost,
+            budgetMax: service.budgetMax,
+            budgetMin: service.budgetMin,
+            amount: service.finalCost || service.budgetMax || service.budgetMin,
+            technician: service.technician,
+            technicianId: service.technicianId,
+            partyLabel: 'Technician',
+            partyName: service.technician?.name || service.technicianId?.name || 'Technician',
+          }));
+          
+          const recentBookingsFormatted = (data?.recentBookings || []).map((booking) => ({
+            id: booking.id || booking._id,
+            _id: booking._id || booking.id,
+            title: booking.title || booking.category || booking.service,
+            category: booking.category,
+            service: booking.service,
+            status: booking.status || 'completed',
+            description: booking.description,
+            locationAddress: booking.locationAddress,
+            scheduledDate: booking.scheduledDate,
+            createdAt: booking.createdAt,
+            updatedAt: booking.updatedAt,
+            completionDate: booking.completionDate,
+            finalCost: booking.finalCost,
+            budgetMax: booking.budgetMax,
+            budgetMin: booking.budgetMin,
+            amount: booking.finalCost || booking.budgetMax || booking.budgetMin,
+            technician: booking.technician,
+            technicianId: booking.technicianId,
+            partyLabel: 'Technician',
+            partyName: booking.technician?.name || booking.technicianId?.name || 'Technician',
+          }));
+          
+          // Combine all services for modal
+          setAllServices([...activeServicesFormatted, ...recentBookingsFormatted]);
+          
+          setStats(data?.stats ?? null);
         }
       } catch (error) {
         console.error('Failed to load dashboard overview:', error);
@@ -510,6 +634,7 @@ const UserProfile = () => {
         profilePhoto: profilePhoto || '',
         isVerified: true,
         stats: {
+          activeJobs: 0,
           totalBookings: 0,
           completedServices: 0,
           totalSpent: 0,
@@ -524,6 +649,7 @@ const UserProfile = () => {
       profilePhoto: profilePhoto || '',
       isVerified: userProfile?.isActive ?? true,
       stats: {
+        activeJobs: stats?.activeJobs ?? 0,
         totalBookings: stats?.totalBookings ?? 0,
         completedServices: stats?.completedServices ?? 0,
         totalSpent: stats?.totalSpent ?? 0,
@@ -531,6 +657,60 @@ const UserProfile = () => {
       },
     };
   }, [profileForm, profilePhoto, userProfile, stats, memberSince]);
+
+  const handleStatCardClick = (statType) => {
+    if (!allServices || allServices.length === 0) {
+      return;
+    }
+
+    let filteredJobs = [];
+    let title = 'Job Details';
+
+    switch (statType) {
+      case 'activeJobs':
+        filteredJobs = allServices.filter((job) =>
+          ['pending', 'confirmed', 'in_progress'].includes(job.status)
+        );
+        title = 'Active Jobs';
+        break;
+      case 'completed':
+        filteredJobs = allServices.filter((job) => job.status === 'completed');
+        title = 'Completed Jobs';
+        break;
+      case 'totalBookings':
+        filteredJobs = allServices;
+        title = 'All Bookings';
+        break;
+      default:
+        filteredJobs = allServices;
+    }
+
+    setJobModalFilter(filteredJobs);
+    setJobModalTitle(title);
+    setJobModalOpen(true);
+  };
+
+  const handleServiceClick = (service) => {
+    // Find the full service details from allServices
+    const fullService = allServices.find(
+      (s) => (s.id === service.id || s._id === service._id || s.id === service._id || s._id === service.id)
+    ) || service;
+    
+    setJobModalFilter([fullService]);
+    setJobModalTitle('Service Details');
+    setJobModalOpen(true);
+  };
+
+  const handleBookingClick = (booking) => {
+    // Find the full booking details from allServices
+    const fullBooking = allServices.find(
+      (b) => (b.id === booking.id || b._id === booking._id || b.id === booking._id || b._id === booking.id)
+    ) || booking;
+    
+    setJobModalFilter([fullBooking]);
+    setJobModalTitle('Booking Details');
+    setJobModalOpen(true);
+  };
 
   const kycStatus = isTechnician ? kycInfo?.status || 'not_submitted' : null;
   const kycMeta = kycStatus ? kycStatusConfig[kycStatus] : null;
@@ -598,6 +778,7 @@ const UserProfile = () => {
         <ProfileHeader
           userProfile={profileHeaderData}
           onProfilePhotoUpdate={handleProfilePhotoUpdate}
+          onStatCardClick={handleStatCardClick}
         />
 
         {isTechnician && kycStatus && (
@@ -989,12 +1170,13 @@ const UserProfile = () => {
               <ul className="mt-4 space-y-3">
                 {activeServices.map((service) => (
                   <li
-                    key={service.id}
-                    className="flex flex-col rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    key={service.id || service._id}
+                    onClick={() => handleServiceClick(service)}
+                    className="flex flex-col rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-slate-100 hover:border-primary/30 transition-all"
                   >
                     <div>
-                      <p className="text-sm font-medium text-slate-900">{service.category}</p>
-                      <p className="mt-1 text-xs text-slate-500">{service.location}</p>
+                      <p className="text-sm font-medium text-slate-900">{service.category || service.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">{service.location || service.locationAddress}</p>
                     </div>
                     <div className="mt-3 flex items-center gap-3 sm:mt-0">
                       {(service.partyName || service.technician?.name) ? (
@@ -1006,7 +1188,7 @@ const UserProfile = () => {
                         </span>
                       ) : null}
                       <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                        {service.status.replace('_', ' ')}
+                        {service.status?.replace('_', ' ') || service.status}
                       </span>
                     </div>
                   </li>
@@ -1025,9 +1207,13 @@ const UserProfile = () => {
             ) : (
               <ul className="mt-4 space-y-3">
                 {recentBookings.map((booking) => (
-                  <li key={booking.id} className="rounded-lg border border-slate-200 px-4 py-3">
+                  <li
+                    key={booking.id || booking._id}
+                    onClick={() => handleBookingClick(booking)}
+                    className="rounded-lg border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50 hover:border-primary/30 transition-all"
+                  >
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-slate-900">{booking.category}</p>
+                      <p className="text-sm font-medium text-slate-900">{booking.category || booking.title}</p>
                       <span className="text-xs uppercase tracking-wide text-slate-400">
                         {booking.status}
                       </span>
@@ -1051,6 +1237,14 @@ const UserProfile = () => {
           </section>
         </div>
       </div>
+
+      {/* Job Details Modal */}
+      <JobDetailsModal
+        isOpen={jobModalOpen}
+        onClose={() => setJobModalOpen(false)}
+        jobs={jobModalFilter || []}
+        title={jobModalTitle}
+      />
     </div>
   );
 };

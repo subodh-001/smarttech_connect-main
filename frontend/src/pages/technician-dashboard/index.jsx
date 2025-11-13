@@ -10,6 +10,7 @@ import CalendarView from './components/CalendarView';
 import NotificationCenter from './components/NotificationCenter';
 import QuickActions from './components/QuickActions';
 import PaymentCollectionModal from './components/PaymentCollectionModal';
+import WithdrawalModal from './components/WithdrawalModal';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../contexts/NewAuthContext';
@@ -227,16 +228,33 @@ const mapActiveRequest = (request) => ({
 });
 
 const mapAppointment = (request) => {
-  // Use scheduledDate if available, otherwise use createdAt or updatedAt
-  const appointmentDate = request.scheduledDate || request.createdAt || request.updatedAt;
+  // For completed jobs, use completionDate; for others, use scheduledDate, then createdAt
+  let appointmentDate;
+  if (request.status === 'completed' && request.completionDate) {
+    appointmentDate = request.completionDate;
+  } else if (request.scheduledDate) {
+    appointmentDate = request.scheduledDate;
+  } else if (request.createdAt) {
+    appointmentDate = request.createdAt;
+  } else {
+    appointmentDate = request.updatedAt || new Date().toISOString();
+  }
+  
+  // Create date object and normalize to local date (remove time component for consistent comparison)
   const dateObj = appointmentDate ? new Date(appointmentDate) : new Date();
+  // Normalize to local date at midnight to ensure consistent date comparison
+  const normalizedDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  normalizedDate.setHours(0, 0, 0, 0);
   
   return {
     id: request.id,
     title: request.title,
     customerName: request.customer?.name || 'Customer',
-    date: dateObj,
-    time: request.scheduledDate ? formatClockTime(request.scheduledDate) : (request.createdAt ? formatClockTime(request.createdAt) : '—'),
+    date: normalizedDate, // Use normalized date for consistent calendar display
+    originalDate: dateObj, // Keep original for time display
+    time: request.scheduledDate ? formatClockTime(request.scheduledDate) : 
+          (request.completionDate && request.status === 'completed' ? formatClockTime(request.completionDate) : 
+          (request.createdAt ? formatClockTime(request.createdAt) : '—')),
     duration: minutesToDuration(request.estimatedDuration),
     location: request.locationAddress,
     amount: request.finalCost ?? request.budgetMax ?? request.budgetMin ?? 0,
@@ -250,12 +268,13 @@ const TechnicianDashboard = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, userProfile, user, fetchUserProfile } = useAuth();
-
+  
   const activeTab = searchParams.get('tab') || 'overview';
 
   const [jobRequests, setJobRequests] = useState([]);
   const [activeJobs, setActiveJobs] = useState([]);
   const [completedJobs, setCompletedJobs] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [earningsData, setEarningsData] = useState(null);
@@ -265,6 +284,7 @@ const TechnicianDashboard = () => {
   const [focusedJobId, setFocusedJobId] = useState(null);
   const [paymentModalJob, setPaymentModalJob] = useState(null);
   const [technicianPayoutInfo, setTechnicianPayoutInfo] = useState(null);
+  const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
 
   const notificationReadIdsRef = useRef(new Set());
   const notificationStorageKey = useMemo(() => {
@@ -324,9 +344,11 @@ const TechnicianDashboard = () => {
     setLoadingData(true);
     setDataError(null);
     try {
-      const [availableRes, assignedRes] = await Promise.all([
+      const [availableRes, assignedRes, balanceRes, withdrawalsRes] = await Promise.all([
         axios.get('/api/service-requests/available'),
         axios.get('/api/service-requests'),
+        axios.get('/api/technicians/me/balance').catch(() => ({ data: { availableBalance: 0 } })),
+        axios.get('/api/technicians/me/withdrawals').catch(() => ({ data: [] })),
       ]);
 
       const availableRaw = availableRes.data || [];
@@ -340,6 +362,7 @@ const TechnicianDashboard = () => {
       setJobRequests(availableRaw.map(mapAvailableRequest));
       setActiveJobs(activeRaw.map(mapActiveRequest));
       setCompletedJobs(completedRaw);
+      setWithdrawals(withdrawalsRes.data || []);
           // Map all assigned requests to appointments (not just confirmed/in_progress)
           // Include all statuses so technicians can see their full schedule
           const allAppointments = assignedRaw
@@ -349,7 +372,10 @@ const TechnicianDashboard = () => {
           setAppointments(allAppointments);
       const generatedNotifications = buildNotifications(availableRaw, activeRaw, completedRaw);
       setNotifications((prev) => mergeNotificationStates(generatedNotifications, prev, notificationReadIdsRef.current));
-      setEarningsData(calculateEarnings(completedRaw, assignedRaw));
+      const earnings = calculateEarnings(completedRaw, assignedRaw);
+      // Use balance from API (accounts for withdrawals)
+      earnings.availableBalance = balanceRes.data?.availableBalance || 0;
+      setEarningsData(earnings);
     } catch (error) {
       console.error('Failed to load technician dashboard data:', error);
       setDataError('Unable to load the latest jobs right now. Please try again in a moment.');
@@ -461,7 +487,7 @@ const TechnicianDashboard = () => {
     const nextStatus = isAvailable ? 'offline' : 'available';
     try {
       await axios.put(`/api/technicians/${technicianProfileId}`, { currentStatus: nextStatus });
-      setIsAvailable(!isAvailable);
+    setIsAvailable(!isAvailable);
       fetchUserProfile?.();
       setKycError(null);
     } catch (error) {
@@ -620,7 +646,12 @@ const TechnicianDashboard = () => {
   };
 
   const handleWithdraw = () => {
-    console.log('Initiating withdrawal');
+    setWithdrawalModalOpen(true);
+  };
+
+  const handleWithdrawalSuccess = async () => {
+    // Refresh dashboard data to update balance
+    await fetchDashboardData();
   };
 
   const handleNavigateToJob = useCallback(
@@ -689,7 +720,7 @@ const TechnicianDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background">
       <Header messageBadgeCount={unreadNotifications} bookingBadgeCount={newJobRequests} onToggleSidebar={() => {}} />
 
       <div className="container mx-auto px-4 pt-16 pb-6 relative z-0">
@@ -726,34 +757,34 @@ const TechnicianDashboard = () => {
             <p className="text-text-secondary">
               {isAvailable ? 'You are currently available for new jobs' : 'You are offline'} • {activeJobs.length}{' '}
               active jobs • ₹{earningsData?.daily?.total ?? 0} earned today
-            </p>
-          </div>
-          <div className="hidden md:flex items-center space-x-4">
-            <div className="text-right">
-              <p className="text-sm text-text-secondary">Current Status</p>
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${isAvailable ? 'bg-success' : 'bg-error'}`}></div>
+                </p>
+              </div>
+              <div className="hidden md:flex items-center space-x-4">
+                <div className="text-right">
+                  <p className="text-sm text-text-secondary">Current Status</p>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-3 h-3 rounded-full ${isAvailable ? 'bg-success' : 'bg-error'}`}></div>
                 <span className="font-medium text-text-primary">{isAvailable ? 'Available' : 'Offline'}</span>
+              </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {activeTab === 'overview' && (
+            {activeTab === 'overview' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <StatusControlPanel
-                isAvailable={isAvailable}
-                onToggleAvailability={handleToggleAvailability}
+                <div className="lg:col-span-2 space-y-6">
+                  <StatusControlPanel
+                    isAvailable={isAvailable}
+                    onToggleAvailability={handleToggleAvailability}
                 currentLocation={userProfile?.address || 'Update your service location'}
-                workingHours="9:00 AM - 6:00 PM"
+                    workingHours="9:00 AM - 6:00 PM"
                 onUpdateLocation={() => navigate('/profile-management?tab=addresses')}
-                onUpdateWorkingHours={() => console.log('Update working hours')}
+                    onUpdateWorkingHours={() => console.log('Update working hours')}
                 availabilityDisabled={!isKycApproved}
                 availabilityDisabledReason="Verification required before going online."
-              />
-
-              <div>
+                  />
+                  
+                  <div>
                 <h2 className="mb-4 text-xl font-semibold text-text-primary">Recent Job Requests</h2>
                 {loadingData ? (
                   <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-text-secondary">
@@ -764,53 +795,57 @@ const TechnicianDashboard = () => {
                     No new job requests right now.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {jobRequests.slice(0, 2).map((job) => (
-                      <JobRequestCard
-                        key={job.id}
-                        job={job}
-                        onAccept={handleAcceptJob}
-                        onDecline={handleDeclineJob}
+                    <div className="grid grid-cols-1 gap-4">
+                      {jobRequests.slice(0, 2).map((job) => (
+                        <JobRequestCard
+                          key={job.id}
+                          job={job}
+                          onAccept={handleAcceptJob}
+                          onDecline={handleDeclineJob}
                         disableAccept={!isKycApproved}
                         disableReason="Finish verification to accept jobs."
                         technicianLocation={technicianLocation}
                         isFocused={focusedJobId === job.id}
-                      />
-                    ))}
-                  </div>
+                        />
+                      ))}
+                    </div>
                 )}
 
-                {jobRequests.length > 2 && (
-                  <div className="mt-4 text-center">
+                    {jobRequests.length > 2 && (
+                      <div className="mt-4 text-center">
                     <Button variant="outline" onClick={() => setSearchParams({ tab: 'jobs' })}>
-                      View All Job Requests ({jobRequests.length})
-                    </Button>
+                          View All Job Requests ({jobRequests.length})
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
 
-            <div className="space-y-6">
-              <EarningsPanel earningsData={earningsData || undefined} onWithdraw={handleWithdraw} />
-              <QuickActions
+                <div className="space-y-6">
+              <EarningsPanel 
+                earningsData={earningsData || undefined} 
+                onWithdraw={handleWithdraw}
+                transactions={completedJobs}
+              />
+                  <QuickActions
                 onEditProfile={() => navigate('/user-profile')}
                 onUploadDocuments={() => navigate('/user-profile#kyc')}
                 onManageServices={() => navigate('/user-profile')}
                 onViewAnalytics={() => console.log('Viewing analytics')}
-              />
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'jobs' && (
-          <div>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-semibold text-text-primary">Job Requests</h2>
-              <div className="flex items-center space-x-2 text-sm text-text-secondary">
-                <Icon name="RefreshCw" size={16} />
-                <span>Auto-refreshing every 30 seconds</span>
+                  />
+                </div>
               </div>
-            </div>
+            )}
+
+            {activeTab === 'jobs' && (
+              <div>
+            <div className="mb-6 flex items-center justify-between">
+                  <h2 className="text-2xl font-semibold text-text-primary">Job Requests</h2>
+                  <div className="flex items-center space-x-2 text-sm text-text-secondary">
+                    <Icon name="RefreshCw" size={16} />
+                    <span>Auto-refreshing every 30 seconds</span>
+                  </div>
+                </div>
             {loadingData ? (
               <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-text-secondary">
                 Loading job requests…
@@ -821,48 +856,53 @@ const TechnicianDashboard = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                {jobRequests.map((job) => (
-                  <JobRequestCard
-                    key={job.id}
-                    job={job}
-                    onAccept={handleAcceptJob}
-                    onDecline={handleDeclineJob}
+                  {jobRequests.map((job) => (
+                    <JobRequestCard
+                      key={job.id}
+                      job={job}
+                      onAccept={handleAcceptJob}
+                      onDecline={handleDeclineJob}
                     disableAccept={!isKycApproved}
                     disableReason="Finish verification to accept jobs."
                     technicianLocation={technicianLocation}
                     isFocused={focusedJobId === job.id}
-                  />
-                ))}
+                    />
+                  ))}
               </div>
             )}
-          </div>
-        )}
+              </div>
+            )}
 
-        {activeTab === 'active' && (
-          <div>
+            {activeTab === 'active' && (
+              <div>
             <h2 className="mb-6 text-2xl font-semibold text-text-primary">Active Jobs</h2>
-            <ActiveJobsSection
-              activeJobs={activeJobs}
-              onNavigate={handleNavigateToJob}
-              onContactCustomer={handleContactCustomer}
-              onUpdateStatus={handleUpdateJobStatus}
+                <ActiveJobsSection
+                  activeJobs={activeJobs}
+                  onNavigate={handleNavigateToJob}
+                  onContactCustomer={handleContactCustomer}
+                  onUpdateStatus={handleUpdateJobStatus}
               onCollectPayment={handleCollectPayment}
               technicianLocation={technicianLocation}
+                />
+              </div>
+            )}
+
+            {activeTab === 'earnings' && (
+          <div>
+            <EarningsPanel 
+              earningsData={earningsData || undefined} 
+              onWithdraw={handleWithdraw}
+              transactions={completedJobs}
+              withdrawals={withdrawals}
             />
-          </div>
-        )}
+              </div>
+            )}
 
-        {activeTab === 'earnings' && (
+            {activeTab === 'schedule' && (
           <div>
-            <EarningsPanel earningsData={earningsData || undefined} onWithdraw={handleWithdraw} />
-          </div>
-        )}
-
-        {activeTab === 'schedule' && (
-          <div>
-            <CalendarView
-              appointments={appointments}
-              onBlockTime={handleBlockTime}
+                <CalendarView
+                  appointments={appointments}
+                  onBlockTime={handleBlockTime}
               onManageAppointment={(appointmentId, action) => {
                 if (action === 'view') {
                   // Navigate to active jobs tab and focus on this job
@@ -875,21 +915,29 @@ const TechnicianDashboard = () => {
                   console.log('Manage appointment', appointmentId, action);
                 }
               }}
-            />
-          </div>
-        )}
+                />
+              </div>
+            )}
 
-        {activeTab === 'notifications' && (
+            {activeTab === 'notifications' && (
           <div>
-            <NotificationCenter
-              notifications={notifications}
-              onMarkAsRead={handleMarkNotificationAsRead}
-              onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+                <NotificationCenter
+                  notifications={notifications}
+                  onMarkAsRead={handleMarkNotificationAsRead}
+                  onMarkAllAsRead={handleMarkAllNotificationsAsRead}
               onNotificationClick={handleNotificationNavigate}
-            />
+                />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+
+      {/* Withdrawal Modal */}
+      <WithdrawalModal
+        isOpen={withdrawalModalOpen}
+        onClose={() => setWithdrawalModalOpen(false)}
+        availableBalance={earningsData?.availableBalance || 0}
+        onSuccess={handleWithdrawalSuccess}
+      />
 
       {/* Payment Collection Modal */}
       <PaymentCollectionModal
@@ -899,7 +947,7 @@ const TechnicianDashboard = () => {
         technicianUpiId={technicianPayoutInfo?.upiId || null}
         onConfirmPayment={handleConfirmPayment}
       />
-    </div>
+      </div>
   );
 };
 

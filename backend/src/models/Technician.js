@@ -42,6 +42,7 @@ const TechnicianSchema = new mongoose.Schema(
     bankAccountName: { type: String },
     bankAccountNumber: { type: String },
     bankIfscCode: { type: String },
+    withdrawalPIN: { type: String }, // Hashed 4-digit PIN for withdrawal security
   },
   { timestamps: true }
 );

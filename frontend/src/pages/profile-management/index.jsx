@@ -10,6 +10,7 @@ import AddressSection from './components/AddressSection';
 import NotificationSettings from './components/NotificationSettings';
 import SecuritySection from './components/SecuritySection';
 import PayoutSettingsSection from './components/PayoutSettingsSection';
+import JobDetailsModal from './components/JobDetailsModal';
 import { useAuth } from '../../contexts/NewAuthContext';
 
 const ProfileManagement = () => {
@@ -40,6 +41,10 @@ const ProfileManagement = () => {
   });
   const [dashboardSummary, setDashboardSummary] = useState(null);
   const [error, setError] = useState(null);
+  const [allServices, setAllServices] = useState([]);
+  const [jobModalOpen, setJobModalOpen] = useState(false);
+  const [jobModalFilter, setJobModalFilter] = useState(null);
+  const [jobModalTitle, setJobModalTitle] = useState('Job Details');
 
   useEffect(() => {
     if (!authLoading && user && !userProfile) {
@@ -66,6 +71,36 @@ const ProfileManagement = () => {
           const completedServices = requests.filter((r) => r.status === 'completed').length;
           const totalBookings = requests.length;
           
+          // Format all services for modal display
+          const formattedServices = requests.map((request) => ({
+            id: request.id || request._id,
+            _id: request._id || request.id,
+            title: request.title || request.category,
+            category: request.category,
+            service: request.service,
+            status: request.status,
+            description: request.description,
+            locationAddress: request.locationAddress,
+            scheduledDate: request.scheduledDate,
+            createdAt: request.createdAt,
+            updatedAt: request.updatedAt,
+            completionDate: request.completionDate,
+            finalCost: request.finalCost,
+            budgetMax: request.budgetMax,
+            budgetMin: request.budgetMin,
+            amount: request.finalCost || request.budgetMax || request.budgetMin,
+            customer: request.customer,
+            customerId: request.customerId,
+            technician: request.technician,
+            technicianId: request.technicianId,
+            partyLabel: 'Customer',
+            partyName: request.customer?.name || request.customer?.fullName || request.customerId?.name || 'Customer',
+            reviewRating: request.reviewRating,
+            reviewComment: request.reviewComment,
+          }));
+          
+          setAllServices(formattedServices);
+          
           setDashboardSummary({
             stats: {
               activeJobs,
@@ -76,6 +111,57 @@ const ProfileManagement = () => {
         } else {
           // For regular users, use the dashboard API
           const { data } = await axios.get('/api/dashboard/user');
+          
+          // Format services for modal display
+          const activeServices = (data?.activeServices || []).map((service) => ({
+            id: service.id || service._id,
+            _id: service._id || service.id,
+            title: service.title || service.category || service.service,
+            category: service.category,
+            service: service.service,
+            status: service.status,
+            description: service.description,
+            locationAddress: service.locationAddress,
+            scheduledDate: service.scheduledDate,
+            createdAt: service.createdAt,
+            updatedAt: service.updatedAt,
+            completionDate: service.completionDate,
+            finalCost: service.finalCost,
+            budgetMax: service.budgetMax,
+            budgetMin: service.budgetMin,
+            amount: service.finalCost || service.budgetMax || service.budgetMin,
+            technician: service.technician,
+            technicianId: service.technicianId,
+            partyLabel: 'Technician',
+            partyName: service.technician?.name || service.technicianId?.name || 'Technician',
+          }));
+          
+          const recentBookings = (data?.recentBookings || []).map((booking) => ({
+            id: booking.id || booking._id,
+            _id: booking._id || booking.id,
+            title: booking.title || booking.category || booking.service,
+            category: booking.category,
+            service: booking.service,
+            status: booking.status || 'completed',
+            description: booking.description,
+            locationAddress: booking.locationAddress,
+            scheduledDate: booking.scheduledDate,
+            createdAt: booking.createdAt,
+            updatedAt: booking.updatedAt,
+            completionDate: booking.completionDate,
+            finalCost: booking.finalCost,
+            budgetMax: booking.budgetMax,
+            budgetMin: booking.budgetMin,
+            amount: booking.finalCost || booking.budgetMax || booking.budgetMin,
+            technician: booking.technician,
+            technicianId: booking.technicianId,
+            partyLabel: 'Technician',
+            partyName: booking.technician?.name || booking.technicianId?.name || 'Technician',
+          }));
+          
+          // Combine all services for modal
+          setAllServices([...activeServices, ...recentBookings]);
+          
           setDashboardSummary(data);
         }
         setError(null);
@@ -295,6 +381,38 @@ const ProfileManagement = () => {
     setSecuritySettings(updatedSettings);
   };
 
+  const handleStatCardClick = (statType) => {
+    if (!allServices || allServices.length === 0) {
+      return;
+    }
+
+    let filteredJobs = [];
+    let title = 'Job Details';
+
+    switch (statType) {
+      case 'activeJobs':
+        filteredJobs = allServices.filter((job) =>
+          ['pending', 'confirmed', 'in_progress'].includes(job.status)
+        );
+        title = 'Active Jobs';
+        break;
+      case 'completed':
+        filteredJobs = allServices.filter((job) => job.status === 'completed');
+        title = 'Completed Jobs';
+        break;
+      case 'totalBookings':
+        filteredJobs = allServices;
+        title = 'All Bookings';
+        break;
+      default:
+        filteredJobs = allServices;
+    }
+
+    setJobModalFilter(filteredJobs);
+    setJobModalTitle(title);
+    setJobModalOpen(true);
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'personal':
@@ -376,11 +494,11 @@ const ProfileManagement = () => {
           </div>
           <Button
             variant="outline"
-            onClick={() => navigate('/user-dashboard')}
+            onClick={() => navigate('/account')}
             iconName="ArrowLeft"
             iconPosition="left"
           >
-            Back to Dashboard
+            Back to Profile
           </Button>
         </div>
 
@@ -393,6 +511,7 @@ const ProfileManagement = () => {
         <ProfileHeader
           userProfile={profileData}
           onProfilePhotoUpdate={handleProfilePhotoUpdate}
+          onStatCardClick={handleStatCardClick}
         />
 
         <div className="bg-surface border border-border rounded-lg mb-6">
@@ -511,6 +630,14 @@ const ProfileManagement = () => {
           </p>
         </div>
       </div>
+
+      {/* Job Details Modal */}
+      <JobDetailsModal
+        isOpen={jobModalOpen}
+        onClose={() => setJobModalOpen(false)}
+        jobs={jobModalFilter || []}
+        title={jobModalTitle}
+      />
     </div>
   );
 };

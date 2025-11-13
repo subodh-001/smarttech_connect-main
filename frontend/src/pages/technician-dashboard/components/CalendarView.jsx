@@ -7,6 +7,31 @@ const CalendarView = ({ appointments, onBlockTime, onManageAppointment }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewFilter, setViewFilter] = useState('all'); // 'all', 'upcoming', 'completed'
 
+  // Helper function to normalize appointment date - MUST be defined before use
+  const normalizeAppointmentDate = (apt) => {
+    if (!apt?.date) return null;
+    try {
+      let aptDate;
+      if (apt.date instanceof Date) {
+        aptDate = new Date(apt.date);
+      } else if (typeof apt.date === 'string') {
+        aptDate = new Date(apt.date);
+      } else {
+        aptDate = new Date(apt.date);
+      }
+      
+      if (isNaN(aptDate.getTime())) return null; // Invalid date
+      
+      // Normalize to local date (remove time component)
+      aptDate = new Date(aptDate.getFullYear(), aptDate.getMonth(), aptDate.getDate());
+      aptDate.setHours(0, 0, 0, 0);
+      return aptDate;
+    } catch (e) {
+      console.warn('Error normalizing appointment date:', apt, e);
+      return null;
+    }
+  };
+
   const getDaysInMonth = (date) => {
     const year = date?.getFullYear();
     const month = date?.getMonth();
@@ -32,11 +57,20 @@ const CalendarView = ({ appointments, onBlockTime, onManageAppointment }) => {
 
   const getAppointmentsForDate = (date) => {
     if (!date) return [];
-    const dateStr = date?.toDateString();
+    
+    // Normalize the target date to local date (remove time component)
+    const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    targetDate.setHours(0, 0, 0, 0);
+    
     let filtered = appointments?.filter(apt => {
       if (!apt?.date) return false;
-      const aptDate = apt.date instanceof Date ? apt.date : new Date(apt.date);
-      return aptDate?.toDateString() === dateStr;
+      
+      // Use the normalizeAppointmentDate helper for consistent date handling
+      const aptDate = normalizeAppointmentDate(apt);
+      if (!aptDate) return false;
+      
+      // Compare normalized dates
+      return aptDate.getTime() === targetDate.getTime();
     }) || [];
     
     // Apply view filter
@@ -103,31 +137,6 @@ const CalendarView = ({ appointments, onBlockTime, onManageAppointment }) => {
   monthStart.setHours(0, 0, 0, 0);
   const monthEnd = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0);
   monthEnd.setHours(23, 59, 59, 999);
-  
-  // Helper function to normalize appointment date
-  const normalizeAppointmentDate = (apt) => {
-    if (!apt?.date) return null;
-    try {
-      let aptDate;
-      if (apt.date instanceof Date) {
-        aptDate = new Date(apt.date);
-      } else if (typeof apt.date === 'string') {
-        aptDate = new Date(apt.date);
-      } else {
-        aptDate = new Date(apt.date);
-      }
-      
-      if (isNaN(aptDate.getTime())) return null; // Invalid date
-      
-      // Normalize to local date (remove time component)
-      aptDate = new Date(aptDate.getFullYear(), aptDate.getMonth(), aptDate.getDate());
-      aptDate.setHours(0, 0, 0, 0);
-      return aptDate;
-    } catch (e) {
-      console.warn('Error normalizing appointment date:', apt, e);
-      return null;
-    }
-  };
   
   // Today's jobs - all jobs for actual today (not selected date)
   const todayAppointments = useMemo(() => {
@@ -257,7 +266,7 @@ const CalendarView = ({ appointments, onBlockTime, onManageAppointment }) => {
           <div className="space-y-2">
             {upcomingAppointments.map((apt) => {
               const aptDate = apt.date instanceof Date ? apt.date : new Date(apt.date);
-              const isToday = aptDate.toDateString() === today.toDateString();
+              const isToday = aptDate.toDateString() === actualToday.toDateString();
               return (
                 <div 
                   key={apt.id}

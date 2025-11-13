@@ -395,12 +395,12 @@ const AdminDashboard = () => {
     const tab = searchParams.get('tab') || 'overview';
     setActiveTab(tab);
   }, [searchParams]);
-
+  
   const handleTabChange = (tabKey) => {
     setActiveTab(tabKey);
     setSearchParams({ tab: tabKey });
   };
-
+  
   useEffect(() => {
     const fetchDashboard = async () => {
       setLoading(true);
@@ -1001,7 +1001,7 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header user={user} location="Admin Console" />
-
+      
       <main className="container mx-auto px-4 pt-24 pb-8 max-w-7xl">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -1057,7 +1057,7 @@ const AdminDashboard = () => {
                   loading={loading}
                   trendLabel="Based on final invoices"
                 />
-              </div>
+                </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <RecentUsersCard
@@ -1072,7 +1072,7 @@ const AdminDashboard = () => {
                   onViewDetails={handleServiceDetails}
                   onViewAll={() => handleTabChange('services')}
                 />
-              </div>
+                </div>
 
               <PendingApprovalsCard
                 loading={loading}
@@ -1081,7 +1081,7 @@ const AdminDashboard = () => {
                 onDecision={handleApproval}
                 onViewAll={() => handleTabChange('approvals')}
               />
-            </div>
+                    </div>
           ) : activeTab === 'users' ? (
             <UsersTab
               users={usersState.data}
@@ -1205,7 +1205,7 @@ const AdminDashboard = () => {
           ) : (
             <PlaceholderTab tab={tabs.find((t) => t.key === activeTab)} onReturn={() => handleTabChange('overview')} />
           )}
-        </div>
+                    </div>
       </main>
       <UserDetailDrawer state={userDetailState} onClose={handleCloseUserDetail} onViewService={handleServiceDetails} />
       <ServiceDetailDrawer state={serviceDetailState} onClose={handleCloseServiceDetail} />
@@ -1218,7 +1218,7 @@ const AdminDashboard = () => {
           onViewService={handleServiceDetails}
         />
       )}
-    </div>
+                  </div>
   );
 };
 
@@ -1268,7 +1268,7 @@ const RecentUsersCard = ({ loading, users, onViewDetails, onViewAll }) => (
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <button
+                            <button 
                 onClick={() => onViewDetails(user.id)}
                               className="text-text-secondary hover:text-text-primary"
                             >
@@ -1279,7 +1279,7 @@ const RecentUsersCard = ({ loading, users, onViewDetails, onViewAll }) => (
         ))
       )}
                     </div>
-                  </div>
+                    </div>
 );
 
 const RecentServicesCard = ({ loading, services, onViewDetails, onViewAll }) => (
@@ -1311,7 +1311,7 @@ const RecentServicesCard = ({ loading, services, onViewDetails, onViewAll }) => 
                           </div>
                           <div className="flex items-center space-x-2">
               <StatusPill status={service.status} />
-                            <button
+                            <button 
                 onClick={() => onViewDetails(service.id)}
                               className="text-text-secondary hover:text-text-primary"
                             >
@@ -1322,17 +1322,17 @@ const RecentServicesCard = ({ loading, services, onViewDetails, onViewAll }) => 
         ))
       )}
                     </div>
-                  </div>
+                    </div>
 );
 
 const PendingApprovalsCard = ({ loading, technicians, onViewDocuments, onDecision, onViewAll }) => (
-  <div className="bg-card rounded-lg border border-border shadow-subtle">
-    <div className="p-4 border-b border-border flex items-center justify-between">
-      <h3 className="text-lg font-semibold text-text-primary">Pending Technician Approvals</h3>
+                <div className="bg-card rounded-lg border border-border shadow-subtle">
+                  <div className="p-4 border-b border-border flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-text-primary">Pending Technician Approvals</h3>
       <Button variant="outline" size="sm" onClick={onViewAll}>
-        View All
-      </Button>
-    </div>
+                      View All
+                    </Button>
+                  </div>
     <div className="p-4 space-y-4">
       {loading ? (
         <LoadingListSkeleton count={3} />
@@ -1340,24 +1340,24 @@ const PendingApprovalsCard = ({ loading, technicians, onViewDocuments, onDecisio
         <EmptyState message="No pending approvals" />
       ) : (
         technicians.map((tech) => (
-          <div key={tech.id} className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                <Icon name="User" size={16} />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-text-primary">{tech.name}</p>
-                <div className="flex items-center space-x-2">
-                  <p className="text-xs text-text-secondary">{tech.email}</p>
+                        <div key={tech.id} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
+                              <Icon name="User" size={16} />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-text-primary">{tech.name}</p>
+                              <div className="flex items-center space-x-2">
+                                <p className="text-xs text-text-secondary">{tech.email}</p>
                   {tech.services?.length ? (
                     <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
                       {tech.services.join(', ')}
                     </span>
                   ) : null}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
               <Button variant="ghost" size="sm" onClick={() => onViewDocuments(tech.id)}>
                 <Icon name="FileText" size={14} className="mr-1" />
                 <span>{tech.documents || 0} docs</span>
@@ -1613,16 +1613,16 @@ const TechniciansTab = ({
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-wrap justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
                             onClick={() => onViewProfile?.(tech)}
-                          >
+                            >
                             View profile
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
                             onClick={() => onToggleAvailability(tech)}
                             disabled={updatingTechnicianId === tech.id}
                             loading={updatingTechnicianId === tech.id}
@@ -2093,26 +2093,26 @@ const ApprovalsTab = ({
                             className="text-error border-error/20 hover:bg-error/10"
                             onClick={() => onReject(item)}
                             disabled={updatingTechnicianId === item.id}
-                          >
-                            Reject
-                          </Button>
-                          <Button
+                            >
+                              Reject
+                            </Button>
+                            <Button 
                             variant="success"
-                            size="sm"
+                              size="sm"
                             onClick={() => onApprove(item)}
                             disabled={updatingTechnicianId === item.id}
                             loading={updatingTechnicianId === item.id}
-                          >
-                            Approve
-                          </Button>
-                        </div>
+                            >
+                              Approve
+                            </Button>
+                          </div>
                       </td>
                     </tr>
                   ))
                 )}
           </tbody>
         </table>
-      </div>
+                        </div>
 
       <div className="flex flex-col gap-3 border-t border-border px-4 py-4 text-sm	text-text-secondary md:flex-row md:items-center md:justify-between">
         <div>
@@ -2172,9 +2172,9 @@ const ReportsTab = ({ data, loading, error, months, onMonthsChange }) => {
             >
               Last {option}m
             </Button>
-          ))}
-        </div>
-      </div>
+                      ))}
+                    </div>
+                  </div>
 
       {loading ? (
         <LoadingListSkeleton count={4} />
@@ -2188,7 +2188,7 @@ const ReportsTab = ({ data, loading, error, months, onMonthsChange }) => {
             <div className="bg-muted/40 border border-border rounded-lg p-4">
               <p className="text-xs text-text-secondary uppercase tracking-wide">Completion rate</p>
               <p className="text-2xl font-semibold text-text-primary mt-2">{data.averages?.completionRate || 0}%</p>
-            </div>
+                </div>
             <div className="bg-muted/40 border border-border rounded-lg p-4">
               <p className="text-xs text-text-secondary uppercase tracking-wide">Avg. resolution time</p>
               <p className="text-2xl font-semibold text-text-primary mt-2">
@@ -2234,8 +2234,8 @@ const ReportsTab = ({ data, loading, error, months, onMonthsChange }) => {
                   ))
                 ) : (
                   <EmptyState message="No monthly performance data." />
-                )}
-              </div>
+              )}
+            </div>
             </div>
 
             <div className="grid grid-rows-2 gap-6">
@@ -2892,8 +2892,8 @@ const TechnicianProfileModal = ({ dialog, onClose, onApprove, onReject, onViewSe
           <Button variant="outline" size="sm" onClick={onClose}>
             Close
           </Button>
-          <Button
-            variant="outline"
+              <Button 
+                variant="outline" 
             size="sm"
             className="text-error border-error/20 hover:bg-error/10"
             onClick={onReject}
@@ -2903,8 +2903,8 @@ const TechnicianProfileModal = ({ dialog, onClose, onApprove, onReject, onViewSe
           </Button>
           <Button variant="success" size="sm" onClick={onApprove} disabled={!technician}>
             Approve
-          </Button>
-        </div>
+              </Button>
+            </div>
       </div>
     </div>
   );
@@ -2946,8 +2946,8 @@ const DocumentRow = ({ label, url, originalName }) => {
         </a>
       ) : (
         <span className="text-xs text-text-secondary">—</span>
-      )}
-    </div>
+          )}
+        </div>
   );
 };
 
