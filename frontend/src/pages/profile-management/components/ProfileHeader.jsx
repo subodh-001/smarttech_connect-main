@@ -43,10 +43,12 @@ const ProfileHeader = ({ userProfile, onProfilePhotoUpdate, onStatCardClick }) =
             <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-4 border-primary/20 bg-primary/10 flex items-center justify-center relative group-hover:opacity-90 transition-opacity">
               {userProfile?.profilePhoto && !imageError ? (
                 <img
+                  key={userProfile.profilePhoto} // Force re-render when photo changes
                   src={userProfile.profilePhoto}
                   alt={`${userProfile?.name}'s profile`}
                   className="w-full h-full object-cover"
                   onError={() => setImageError(true)}
+                  onLoad={() => setImageError(false)} // Reset error on successful load
                 />
               ) : (
                 <div className="w-full h-full bg-primary text-primary-foreground flex items-center justify-center text-3xl md:text-4xl font-semibold">

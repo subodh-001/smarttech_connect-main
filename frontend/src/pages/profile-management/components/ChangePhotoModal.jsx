@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import axios from 'axios';
+import { useAuth } from '../../../contexts/NewAuthContext';
 
 const ChangePhotoModal = ({ isOpen, onClose, currentPhoto, onSave, userName }) => {
+  const { fetchUserProfile } = useAuth();
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [zoom, setZoom] = useState(1);
@@ -87,6 +89,12 @@ const ChangePhotoModal = ({ isOpen, onClose, currentPhoto, onSave, userName }) =
       setIsUploading(true);
       try {
         await axios.put('/api/users/me', { avatarUrl: '' });
+        
+        // Refresh user profile to get the latest data
+        if (fetchUserProfile) {
+          await fetchUserProfile();
+        }
+        
         if (typeof onSave === 'function') {
           onSave('');
         }
@@ -131,6 +139,11 @@ const ChangePhotoModal = ({ isOpen, onClose, currentPhoto, onSave, userName }) =
             }
           } catch (storageError) {
             console.warn('Failed to update localStorage:', storageError);
+          }
+
+          // Refresh user profile to get the latest data
+          if (fetchUserProfile) {
+            await fetchUserProfile();
           }
 
           if (typeof onSave === 'function') {

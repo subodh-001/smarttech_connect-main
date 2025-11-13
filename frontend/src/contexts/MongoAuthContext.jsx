@@ -86,6 +86,7 @@ export const MongoAuthProvider = ({ children }) => {
         address: userResponse.data.address,
         city: userResponse.data.city,
         postal_code: userResponse.data.postalCode,
+        password_changed_at: userResponse.data.passwordChangedAt,
         created_at: userResponse.data.createdAt,
         updated_at: userResponse.data.updatedAt
       };

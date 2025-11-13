@@ -722,7 +722,7 @@ const TechnicianDashboard = () => {
   return (
       <div className="min-h-screen bg-background">
       <Header messageBadgeCount={unreadNotifications} bookingBadgeCount={newJobRequests} onToggleSidebar={() => {}} />
-
+        
       <div className="container mx-auto px-4 pt-16 pb-6 relative z-0">
         {!isKycApproved && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4 text-amber-900 shadow-sm">
@@ -753,8 +753,8 @@ const TechnicianDashboard = () => {
           <div>
             <h1 className="text-3xl font-bold text-text-primary">
               Welcome back, {userProfile?.full_name || userProfile?.fullName || 'Technician'}!
-            </h1>
-            <p className="text-text-secondary">
+                </h1>
+                <p className="text-text-secondary">
               {isAvailable ? 'You are currently available for new jobs' : 'You are offline'} • {activeJobs.length}{' '}
               active jobs • ₹{earningsData?.daily?.total ?? 0} earned today
                 </p>
@@ -765,7 +765,7 @@ const TechnicianDashboard = () => {
                   <div className="flex items-center space-x-2">
                     <div className={`w-3 h-3 rounded-full ${isAvailable ? 'bg-success' : 'bg-error'}`}></div>
                 <span className="font-medium text-text-primary">{isAvailable ? 'Available' : 'Offline'}</span>
-              </div>
+                </div>
               </div>
             </div>
           </div>
@@ -822,11 +822,11 @@ const TechnicianDashboard = () => {
                 </div>
 
                 <div className="space-y-6">
-              <EarningsPanel 
+                  <EarningsPanel
                 earningsData={earningsData || undefined} 
-                onWithdraw={handleWithdraw}
+                    onWithdraw={handleWithdraw}
                 transactions={completedJobs}
-              />
+                  />
                   <QuickActions
                 onEditProfile={() => navigate('/user-profile')}
                 onUploadDocuments={() => navigate('/user-profile#kyc')}
@@ -868,7 +868,7 @@ const TechnicianDashboard = () => {
                     isFocused={focusedJobId === job.id}
                     />
                   ))}
-              </div>
+                </div>
             )}
               </div>
             )}
@@ -889,12 +889,12 @@ const TechnicianDashboard = () => {
 
             {activeTab === 'earnings' && (
           <div>
-            <EarningsPanel 
+                <EarningsPanel
               earningsData={earningsData || undefined} 
-              onWithdraw={handleWithdraw}
+                  onWithdraw={handleWithdraw}
               transactions={completedJobs}
               withdrawals={withdrawals}
-            />
+                />
               </div>
             )}
 

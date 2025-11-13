@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import UserSettings from '../models/UserSettings.js';
 import authMiddleware from '../middleware/auth.js';
@@ -19,6 +20,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     address: user.address,
     city: user.city,
     postalCode: user.postalCode,
+    passwordChangedAt: user.passwordChangedAt,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
   });
@@ -95,6 +97,52 @@ router.put('/me/settings', authMiddleware, async (req, res) => {
     { new: true, upsert: true }
   );
   res.json(settings);
+});
+
+// Change password
+router.put('/me/password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+    
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+      return res.status(400).json({ error: 'New password must contain uppercase, lowercase, and number' });
+    }
+    
+    const user = await User.findById(req.user.sub);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Hash and update new password
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = passwordHash;
+    user.passwordChangedAt = new Date(); // Set password changed timestamp
+    await user.save();
+    
+    res.json({ 
+      message: 'Password updated successfully',
+      passwordChangedAt: user.passwordChangedAt
+    });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to change password. Please try again.' 
+    });
+  }
 });
 
 export default router;

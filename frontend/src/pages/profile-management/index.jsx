@@ -66,8 +66,20 @@ const ProfileManagement = () => {
           const { data: requestsData } = await axios.get('/api/service-requests');
           const requests = Array.isArray(requestsData) ? requestsData : [];
           
+          // Normalize status to handle variations
+          const normalizeStatus = (status) => {
+            if (!status) return '';
+            const normalized = String(status).toLowerCase().trim();
+            // Handle variations
+            if (normalized === 'in progress' || normalized === 'inprogress') return 'in_progress';
+            return normalized;
+          };
+          
           const activeStatusSet = new Set(['pending', 'confirmed', 'in_progress']);
-          const activeJobs = requests.filter((r) => activeStatusSet.has(r.status)).length;
+          const activeJobs = requests.filter((r) => {
+            const normalizedStatus = normalizeStatus(r?.status);
+            return activeStatusSet.has(normalizedStatus);
+          }).length;
           const completedServices = requests.filter((r) => r.status === 'completed').length;
           const totalBookings = requests.length;
           
@@ -112,8 +124,24 @@ const ProfileManagement = () => {
           // For regular users, use the dashboard API
           const { data } = await axios.get('/api/dashboard/user');
           
-          // Format services for modal display
-          const activeServices = (data?.activeServices || []).map((service) => ({
+          // Filter active services on client side to ensure accuracy
+          // Handle case-insensitive status matching and normalize status values
+          const activeStatusSet = new Set(['pending', 'confirmed', 'in_progress']);
+          const normalizeStatus = (status) => {
+            if (!status) return '';
+            const normalized = String(status).toLowerCase().trim();
+            // Handle variations
+            if (normalized === 'in progress' || normalized === 'inprogress') return 'in_progress';
+            return normalized;
+          };
+          
+          const rawActiveServices = (data?.activeServices ?? []).filter((service) => {
+            const normalizedStatus = normalizeStatus(service?.status);
+            return activeStatusSet.has(normalizedStatus);
+          });
+          
+          // Format services for modal display - use filtered active services
+          const activeServices = rawActiveServices.map((service) => ({
             id: service.id || service._id,
             _id: service._id || service.id,
             title: service.title || service.category || service.service,
@@ -162,7 +190,17 @@ const ProfileManagement = () => {
           // Combine all services for modal
           setAllServices([...activeServices, ...recentBookings]);
           
-          setDashboardSummary(data);
+          // Calculate activeJobs from filtered activeServices to ensure accuracy
+          const activeJobsCount = rawActiveServices.length;
+          const backendStats = data?.stats || {};
+          
+          setDashboardSummary({
+            ...data,
+            stats: {
+              ...backendStats,
+              activeJobs: activeJobsCount, // Use filtered count instead of backend value
+            },
+          });
         }
         setError(null);
       } catch (err) {
@@ -246,7 +284,7 @@ const ProfileManagement = () => {
       dateOfBirth: userProfile.dateOfBirth || userProfile.date_of_birth || '',
       emergencyContact: userProfile.emergencyContact || '',
       emergencyPhone: userProfile.emergencyPhone || '',
-      profilePhoto: userProfile.avatar_url || userProfile.avatarUrl || '',
+      profilePhoto: userProfile.avatar_url || userProfile.avatarUrl || userProfile.profilePhoto || '',
       isVerified: userProfile.is_active ?? true,
       role: isTechnician ? 'technician' : (user?.role || user?.type || 'user'),
       stats: {
@@ -350,16 +388,20 @@ const ProfileManagement = () => {
       console.warn('Failed to update localStorage:', storageError);
     }
     
-    // The ProfileHeader component already handles the backend upload
-    // So we don't need to do it here to avoid double uploads
-    // Just refresh the profile after a delay to get the latest data
-    setTimeout(async () => {
-      try {
-        await fetchUserProfile();
-      } catch (err) {
-        console.error('Failed to refresh profile:', err);
+    // Refresh the profile immediately to get the latest data from backend
+    try {
+      await fetchUserProfile();
+      // Also reload profile data from API
+      const { data: userData } = await axios.get('/api/users/me');
+      if (userData) {
+        setProfileData((prev) => ({
+          ...prev,
+          profilePhoto: userData.avatarUrl || userData.avatar_url || newPhotoUrl,
+        }));
       }
-    }, 1000);
+    } catch (err) {
+      console.error('Failed to refresh profile:', err);
+    }
   };
 
   const handleAddressesUpdate = (updatedAddresses) => {

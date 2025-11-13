@@ -13,8 +13,7 @@ const OTPLoginModal = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  // Mock OTP for testing
-  const mockOTP = '123456';
+  // OTP validation - removed mock OTP, now validates against actual OTP from backend
 
   useEffect(() => {
     let timer;
@@ -47,10 +46,8 @@ const OTPLoginModal = ({ isOpen, onClose }) => {
       setErrors({ otp: 'OTP must be 6 digits' });
       return false;
     }
-    if (otp !== mockOTP) {
-      setErrors({ otp: `Invalid OTP. Use ${mockOTP} for testing` });
-      return false;
-    }
+    // OTP validation is handled by the backend API
+    // No client-side mock validation
     setErrors({});
     return true;
   };
@@ -198,7 +195,7 @@ const OTPLoginModal = ({ isOpen, onClose }) => {
                 </p>
                 <p className="text-sm font-medium text-foreground">{phoneNumber}</p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Use <span className="font-mono font-medium">{mockOTP}</span> for testing
+                  Check your phone for the OTP code
                 </p>
               </div>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Header from '../../components/ui/Header';
@@ -113,12 +113,13 @@ const UserProfile = () => {
   const [jobModalFilter, setJobModalFilter] = useState(null);
   const [jobModalTitle, setJobModalTitle] = useState('Job Details');
   const [fetchingDashboard, setFetchingDashboard] = useState(false);
+  const loadingRef = useRef(false); // Ref to track loading state without causing re-renders
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const isTechnician = useMemo(
     () => (userProfile?.role || user?.role) === 'technician',
-    [userProfile, user]
+    [userProfile?.role, user?.role] // Only depend on role, not entire objects
   );
   const [kycInfo, setKycInfo] = useState({ status: 'loading' });
   const [kycUploading, setKycUploading] = useState(false);
@@ -151,7 +152,14 @@ const UserProfile = () => {
   useEffect(() => {
     if (!user) return;
 
+    let isMounted = true; // Flag to prevent state updates if component unmounts
+    let abortController = new AbortController(); // Abort controller for canceling requests
+
     const loadDashboard = async () => {
+      // Prevent multiple simultaneous calls
+      if (loadingRef.current) return;
+      
+      loadingRef.current = true;
       setFetchingDashboard(true);
       try {
         const headers = {
@@ -160,7 +168,10 @@ const UserProfile = () => {
         };
 
         if (isTechnician) {
-          const { data: requestsData } = await axios.get('/api/service-requests', { headers });
+          const { data: requestsData } = await axios.get('/api/service-requests', { 
+            headers,
+            signal: abortController.signal 
+          });
           const requests = Array.isArray(requestsData) ? requestsData : [];
           const activeStatusSet = new Set(['pending', 'confirmed', 'in_progress']);
 
@@ -250,7 +261,10 @@ const UserProfile = () => {
             reviewComment: request.reviewComment,
           }));
 
-          setAllServices(formattedServices);
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setAllServices(formattedServices);
+          }
 
           const totalEarned = completed.reduce((sum, request) => sum + (request.finalCost || 0), 0);
           const averageRating =
@@ -261,19 +275,41 @@ const UserProfile = () => {
                 ).toFixed(1)
               : 0;
 
-          setActiveServices(active);
-          setRecentBookings(recent);
-          setStats({
-            activeJobs: active.length,
-            totalBookings: requests.length,
-            completedServices: completed.length,
-            totalSpent: Number(totalEarned.toFixed(0)),
-            moneySaved: Number(totalEarned.toFixed(0)),
-            avgRatingGiven: averageRating,
-          });
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setActiveServices(active);
+            setRecentBookings(recent);
+            setStats({
+              activeJobs: active.length,
+              totalBookings: requests.length,
+              completedServices: completed.length,
+              totalSpent: Number(totalEarned.toFixed(0)),
+              moneySaved: Number(totalEarned.toFixed(0)),
+              avgRatingGiven: averageRating,
+            });
+          }
         } else {
-          const { data } = await axios.get('/api/dashboard/user', { headers });
-          const normalizedActive = (data?.activeServices ?? []).map((service) => ({
+          const { data } = await axios.get('/api/dashboard/user', { 
+            headers,
+            signal: abortController.signal 
+          });
+          // Filter active services on client side to ensure accuracy
+          // Handle case-insensitive status matching and normalize status values
+          const activeStatusSet = new Set(['pending', 'confirmed', 'in_progress']);
+          const normalizeStatus = (status) => {
+            if (!status) return '';
+            const normalized = String(status).toLowerCase().trim();
+            // Handle variations
+            if (normalized === 'in progress' || normalized === 'inprogress') return 'in_progress';
+            return normalized;
+          };
+          
+          const rawActiveServices = (data?.activeServices ?? []).filter((service) => {
+            const normalizedStatus = normalizeStatus(service?.status);
+            return activeStatusSet.has(normalizedStatus);
+          });
+          
+          const normalizedActive = rawActiveServices.map((service) => ({
             ...service,
             id: service.id || service._id,
             _id: service._id || service.id,
@@ -292,11 +328,14 @@ const UserProfile = () => {
             partyName: booking?.technician?.name || booking?.technicianId?.name || null,
           }));
 
-          setActiveServices(normalizedActive);
-          setRecentBookings(normalizedRecent);
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setActiveServices(normalizedActive);
+            setRecentBookings(normalizedRecent);
+          }
           
-          // Format all services for modal display
-          const activeServicesFormatted = (data?.activeServices || []).map((service) => ({
+          // Format all services for modal display - use filtered active services
+          const activeServicesFormatted = rawActiveServices.map((service) => ({
             id: service.id || service._id,
             _id: service._id || service.id,
             title: service.title || service.category || service.service,
@@ -343,22 +382,57 @@ const UserProfile = () => {
           }));
           
           // Combine all services for modal
-          setAllServices([...activeServicesFormatted, ...recentBookingsFormatted]);
+          if (isMounted) {
+            setAllServices([...activeServicesFormatted, ...recentBookingsFormatted]);
+          }
           
-          setStats(data?.stats ?? null);
+          // Calculate stats from actual data
+          // activeJobs should be calculated from filtered activeServices (services with status: pending, confirmed, in_progress)
+          // Use the filtered count to ensure accuracy
+          const activeJobsCount = rawActiveServices.length;
+          // Use backend stats for completed and total (backend has the full count, not just recent 6)
+          const backendStats = data?.stats || {};
+          
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setStats({
+              activeJobs: activeJobsCount, // Calculate from activeServices array length
+              completedServices: backendStats.completedServices ?? 0,
+              totalBookings: backendStats.totalBookings ?? 0,
+              totalSpent: backendStats.totalSpent ?? 0,
+              moneySaved: backendStats.moneySaved ?? 0,
+              avgRatingGiven: backendStats.avgRatingGiven ?? 0,
+            });
+          }
         }
       } catch (error) {
+        // Ignore abort errors
+        if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
+          return;
+        }
         console.error('Failed to load dashboard overview:', error);
-        setActiveServices([]);
-        setRecentBookings([]);
-        setStats(null);
+        if (isMounted) {
+          setActiveServices([]);
+          setRecentBookings([]);
+          // Don't reset stats to null, keep previous values on error
+          // setStats(null);
+        }
       } finally {
-        setFetchingDashboard(false);
+        loadingRef.current = false;
+        if (isMounted) {
+          setFetchingDashboard(false);
+        }
       }
     };
 
     loadDashboard();
-  }, [user, isTechnician]);
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      abortController.abort(); // Cancel any pending requests
+    };
+  }, [user?.id, isTechnician]); // Only depend on user.id, not the entire user object
 
   useEffect(() => {
     if (!isTechnician) {

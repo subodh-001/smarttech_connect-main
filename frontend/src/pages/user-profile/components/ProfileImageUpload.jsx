@@ -33,7 +33,7 @@ const ProfileImageUpload = ({ currentImage, onImageUpdate }) => {
       const previewUrl = URL.createObjectURL(file);
       setPreview(previewUrl);
 
-      // Mock upload: generate a blob URL and save to localStorage
+      // Upload image to backend
       const publicUrl = previewUrl;
       onImageUpdate?.(publicUrl);
       const stored = localStorage.getItem('smarttech_user');

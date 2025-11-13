@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
@@ -12,10 +12,30 @@ const RescheduleModal = ({ booking, isOpen, onClose, onConfirm }) => {
 
   if (!isOpen || !booking) return null;
 
-  // Mock available time slots
-  const availableTimeSlots = [
-    '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'
-  ];
+  const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
+
+  // Fetch available time slots from API
+  useEffect(() => {
+    if (!isOpen || !booking) return;
+    
+    const fetchTimeSlots = async () => {
+      try {
+        // TODO: Replace with actual API endpoint when available
+        // const { data } = await axios.get(`/api/service-requests/${booking.id}/available-slots`, {
+        //   params: { date: selectedDate }
+        // });
+        // setAvailableTimeSlots(data?.slots || []);
+        setAvailableTimeSlots([]); // Empty until API is implemented
+      } catch (error) {
+        console.error('Failed to fetch time slots:', error);
+        setAvailableTimeSlots([]);
+      }
+    };
+    
+    if (selectedDate) {
+      fetchTimeSlots();
+    }
+  }, [isOpen, booking, selectedDate]);
 
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) return;
